@@ -297,7 +297,7 @@ def training(max_it, it_offset):
 
         global lr_nn
         #learning rate decay
-        if it % decay_n == 0 and it != 0:
+        if it % (decay_n*batch_epoch) == 0 and it != 0:
             lr_nn = max(lr_nn * decay_factor, 0.0002)
 
         _ = sess.run([vade_step], feed_dict={real: real_ipt, learning_rate:lr_nn})
