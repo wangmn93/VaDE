@@ -53,7 +53,7 @@ def mnist_load(data_dir, dataset='train', keep = None, shift=True):
         if shift:
             imgs = np.fromfile(fimg, dtype=np.uint8).reshape(len(lbls), rows, cols) / 127.5 - 1
         else:
-            imgs = np.fromfile(fimg, dtype=np.uint8).reshape(len(lbls), rows, cols) / 127.5
+            imgs = np.fromfile(fimg, dtype=np.uint8).reshape(len(lbls), rows, cols) / 255.
 
     if keep is None:
         return imgs, lbls, len(lbls)

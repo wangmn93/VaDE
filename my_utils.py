@@ -14,6 +14,16 @@ def getMNISTDatapool(batch_size, keep=None, shift=True):
     data_pool = utils.MemoryData({'img': imgs, 'label':y}, batch_size)
     return data_pool
 
+def getFashion_MNISTDatapool(batch_size, keep=None, shift=True):
+    if keep is None:
+        imgs, y, num_train_data = data.mnist_load('Fashion_MNIST',shift=shift)
+    else:
+        imgs, y, num_train_data = data.mnist_load('Fashion_MNIST', keep=keep, shift=shift)
+    print "Total number of training data: " + str(num_train_data)
+    imgs.shape = imgs.shape + (1,)
+    data_pool = utils.MemoryData({'img': imgs, 'label':y}, batch_size)
+    return data_pool
+
 def getOnehot(labels, depth):
     onehot_labels = tf.one_hot(indices=labels, depth=depth)
     return onehot_labels

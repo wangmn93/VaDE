@@ -101,7 +101,14 @@ if 0:
     #     return loss
 
 if 1:
-    data_pool = my_utils.getMNISTDatapool(50)
+    import matplotlib.pyplot as plt
+    import numpy as np
+    data_pool = my_utils.getFashion_MNISTDatapool(10)
     a,b = data_pool.batch(['img','label'])
-    c=0
+    for i in range(len(a)):
+        img_2 = np.reshape(a[i], [28, 28])
+        plt.imshow(img_2, cmap='gray')
+        plt.show()
+
+
 
