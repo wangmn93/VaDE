@@ -36,7 +36,9 @@ gan_type="ae"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-data_pool = my_utils.getMNISTDatapool(batch_size) #range -1 ~ 1
+data_pool = my_utils.getFullMNISTDatapool(batch_size) #range -1 ~ 1
+full_data_pool = my_utils.getFullMNISTDatapool(70000)
+num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
 
@@ -233,10 +235,52 @@ print('Tensorboard dir: '+logdir)
 sess.run(tf.global_variables_initializer())
 sess.run(load_weight) #load pretrain weights
 
+import scipy.io as scio
+import sys
+import gzip
+from six.moves import cPickle
+def load_data(dataset):
+    path = 'dataset/' + dataset + '/'
+    if dataset == 'mnist':
+        path = path + 'mnist.pkl.gz'
+        if path.endswith(".gz"):
+            f = gzip.open(path, 'rb')
+        else:
+            f = open(path, 'rb')
+
+        if sys.version_info < (3,):
+            (x_train, y_train), (x_test, y_test) = cPickle.load(f)
+        else:
+            (x_train, y_train), (x_test, y_test) = cPickle.load(f, encoding="bytes")
+
+        f.close()
+        x_train = x_train.astype('float32') / 255.
+        x_test = x_test.astype('float32') / 255.
+        x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+        x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+        X = np.concatenate((x_train, x_test))
+        Y = np.concatenate((y_train, y_test))
+
+    if dataset == 'reuters10k':
+        data = scio.loadmat(path + 'reuters10k.mat')
+        X = data['X']
+        Y = data['Y'].squeeze()
+
+    if dataset == 'har':
+        data = scio.loadmat(path + 'HAR.mat')
+        X = data['X']
+        X = X.astype('float32')
+        Y = data['Y'] - 1
+        X = X[:10200]
+        Y = Y[:10200]
+
+    return X, Y
 def gmm_init():
-    imgs, _, _ = data.mnist_load('MNIST_data')
-    imgs.shape = imgs.shape + (1,)
-    sample = sess.run(z_mean, feed_dict={real:imgs})
+    # imgs = full_data_pool.batch('img')
+    # imgs = (imgs + 1) / 2.
+    X, Y = load_data('mnist')
+    X = np.reshape(X, [70000,28, 28,1])
+    sample = sess.run(z_mean, feed_dict={real:X})
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
     g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
@@ -306,10 +350,19 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             # real_ipt = (data_pool.batch('img')+1)/2.
             # z_ipt =  np.random.normal(size=[batch_size, z_dim])
-            summary, predict_y = sess.run([merged, predicts], feed_dict={real: real_ipt})
-            acc = cluster_acc(predict_y, y)
-            print('acc-it%d'%it,acc[0])
+            summary, predict_y = sess.run([merged,predicts], feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
+            # if it % (batch_size*batch_epoch) == 0:
+            #     X,Y = full_data_pool.batch(['img','label'])
+            #     X = (X + 1) / 2.
+            #     predict_y = sess.run(predicts, feed_dict={real: X})
+            #     acc = cluster_acc(predict_y, Y)
+            #     print('full-acc-it%d'%it,acc[0])
+            # else:
+            # predict_y = sess.run(predicts, feed_dict={real: real_ipt})
+            acc = cluster_acc(predict_y, y)
+            print('batch-acc-it%d' % it, acc[0])
+
 
             #print acc
 

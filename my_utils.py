@@ -14,6 +14,19 @@ def getMNISTDatapool(batch_size, keep=None, shift=True):
     data_pool = utils.MemoryData({'img': imgs, 'label':y}, batch_size)
     return data_pool
 
+def getFullMNISTDatapool(batch_size, keep=None, shift=True):
+    if keep is None:
+        imgs, y, num_train_data = data.mnist_load('MNIST_data',shift=shift)
+        imgs_t, y_t, num_train_data_t = data.mnist_load('MNIST_data',dataset='test',shift=shift)
+    else:
+        imgs, y, num_train_data = data.mnist_load('MNIST_data', keep=keep, shift=shift)
+        imgs_t, y_t, num_train_data_t = data.mnist_load('MNIST_data', keep=keep,dataset='test',shift = shift)
+    print "Total number of training data: " + str(num_train_data + num_train_data_t)
+    imgs.shape = imgs.shape + (1,)
+    imgs_t.shape = imgs_t.shape + (1,)
+    data_pool = utils.MemoryData({'img': np.concatenate((imgs,imgs_t)), 'label':np.concatenate((y,y_t))}, batch_size)
+    return data_pool
+
 def getFashion_MNISTDatapool(batch_size, keep=None, shift=True):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('Fashion_MNIST',shift=shift)
