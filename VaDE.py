@@ -30,14 +30,18 @@ z_dim = 10
 n_centroid = 10
 original_dim =784
 
+is_pretrain = True
+
 n_critic = 1 #
 n_generator = 1
-gan_type="ae"
+gan_type="VaDE"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-data_pool = my_utils.getFullMNISTDatapool(batch_size) #range -1 ~ 1
-full_data_pool = my_utils.getFullMNISTDatapool(70000)
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+full_data_pool = my_utils.getFullMNISTDatapool(70000, shift=False)
+X, Y = my_utils.load_data('mnist')
+X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
@@ -100,14 +104,14 @@ load_weight = load_pretrain_weight()
 def gamma_output(z, u_p, theta_p, lambda_p):
     Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
 
-    u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [batch_size, 1, 1])
+    u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [num_data, 1, 1])
     # u_tensor3 = T.repeat(tf.expand_dims(u_p,[0]), batch_size, axis=0)
     # lambda_tensor3 = T.repeat(tf.expand_dims(lambda_p,[0]), batch_size, axis=0)
-    lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [batch_size, 1, 1])
+    lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [num_data, 1, 1])
     temp_theta_p = tf.expand_dims(theta_p, [0])
     temp_theta_p = tf.expand_dims(temp_theta_p, [0])
     # theta_tensor3 = temp_theta_p * T.ones((batch_size, z_dim, n_centroid))
-    theta_tensor3 = tf.tile(temp_theta_p, [batch_size, z_dim, 1])
+    theta_tensor3 = tf.tile(temp_theta_p, [num_data, z_dim, 1])
 
     # @TODO
     # PROBLEM HERE ? add theta z_dim times for each cluster?
@@ -235,51 +239,11 @@ print('Tensorboard dir: '+logdir)
 sess.run(tf.global_variables_initializer())
 sess.run(load_weight) #load pretrain weights
 
-import scipy.io as scio
-import sys
-import gzip
-from six.moves import cPickle
-def load_data(dataset):
-    path = 'dataset/' + dataset + '/'
-    if dataset == 'mnist':
-        path = path + 'mnist.pkl.gz'
-        if path.endswith(".gz"):
-            f = gzip.open(path, 'rb')
-        else:
-            f = open(path, 'rb')
 
-        if sys.version_info < (3,):
-            (x_train, y_train), (x_test, y_test) = cPickle.load(f)
-        else:
-            (x_train, y_train), (x_test, y_test) = cPickle.load(f, encoding="bytes")
-
-        f.close()
-        x_train = x_train.astype('float32') / 255.
-        x_test = x_test.astype('float32') / 255.
-        x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
-        x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
-        X = np.concatenate((x_train, x_test))
-        Y = np.concatenate((y_train, y_test))
-
-    if dataset == 'reuters10k':
-        data = scio.loadmat(path + 'reuters10k.mat')
-        X = data['X']
-        Y = data['Y'].squeeze()
-
-    if dataset == 'har':
-        data = scio.loadmat(path + 'HAR.mat')
-        X = data['X']
-        X = X.astype('float32')
-        Y = data['Y'] - 1
-        X = X[:10200]
-        Y = Y[:10200]
-
-    return X, Y
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
-    X, Y = load_data('mnist')
-    X = np.reshape(X, [70000,28, 28,1])
+
     sample = sess.run(z_mean, feed_dict={real:X})
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
@@ -337,7 +301,7 @@ def training(max_it, it_offset):
     for it in range(it_offset, it_offset + max_it):
         # for i in range(n_critic):
         real_ipt, y = data_pool.batch(['img','label'])
-        real_ipt = (real_ipt+1)/2.
+        # real_ipt = (real_ipt+1)/2.
 
         global lr_nn
         #learning rate decay
@@ -350,18 +314,18 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             # real_ipt = (data_pool.batch('img')+1)/2.
             # z_ipt =  np.random.normal(size=[batch_size, z_dim])
-            summary, predict_y = sess.run([merged,predicts], feed_dict={real: real_ipt})
+            summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-            # if it % (batch_size*batch_epoch) == 0:
+        if it % (batch_size*batch_epoch) == 0:
             #     X,Y = full_data_pool.batch(['img','label'])
             #     X = (X + 1) / 2.
-            #     predict_y = sess.run(predicts, feed_dict={real: X})
-            #     acc = cluster_acc(predict_y, Y)
-            #     print('full-acc-it%d'%it,acc[0])
+            predict_y = sess.run(predicts, feed_dict={real: X})
+            acc = cluster_acc(predict_y, Y)
+            print('full-acc-EPOCH-%d'%(it//batch_size*batch_epoch),acc[0])
             # else:
             # predict_y = sess.run(predicts, feed_dict={real: real_ipt})
-            acc = cluster_acc(predict_y, y)
-            print('batch-acc-it%d' % it, acc[0])
+            # acc = cluster_acc(predict_y, y)
+            # print('batch-acc-it%d' % it, acc[0])
 
 
             #print acc

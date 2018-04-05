@@ -3,6 +3,46 @@ import utils
 import tensorflow as tf
 import numpy as np
 from matplotlib import pyplot as plt
+import scipy.io as scio
+import sys
+import gzip
+from six.moves import cPickle
+def load_data(dataset):
+    path = 'dataset/' + dataset + '/'
+    if dataset == 'mnist':
+        path = path + 'mnist.pkl.gz'
+        if path.endswith(".gz"):
+            f = gzip.open(path, 'rb')
+        else:
+            f = open(path, 'rb')
+
+        if sys.version_info < (3,):
+            (x_train, y_train), (x_test, y_test) = cPickle.load(f)
+        else:
+            (x_train, y_train), (x_test, y_test) = cPickle.load(f, encoding="bytes")
+
+        f.close()
+        x_train = x_train.astype('float32') / 255.
+        x_test = x_test.astype('float32') / 255.
+        x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+        x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+        X = np.concatenate((x_train, x_test))
+        Y = np.concatenate((y_train, y_test))
+
+    if dataset == 'reuters10k':
+        data = scio.loadmat(path + 'reuters10k.mat')
+        X = data['X']
+        Y = data['Y'].squeeze()
+
+    if dataset == 'har':
+        data = scio.loadmat(path + 'HAR.mat')
+        X = data['X']
+        X = X.astype('float32')
+        Y = data['Y'] - 1
+        X = X[:10200]
+        Y = Y[:10200]
+
+    return X, Y
 
 def getMNISTDatapool(batch_size, keep=None, shift=True):
     if keep is None:
