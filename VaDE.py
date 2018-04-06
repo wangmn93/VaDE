@@ -19,7 +19,7 @@ from keras import objectives
 
 
 """ param """
-epoch = 100
+epoch = 3000
 batch_size = 100
 # lr = 1e-3
 lr_nn = 0.002
@@ -84,8 +84,9 @@ def load_weight_for_one_layer(scope, target_layer, src_model, src_layer_index, o
 
 def load_pretrain_weight():
     assign_ops = []
-    ae = model_from_json(open('pretrain_weights/ae_mnist.json').read())
-    ae.load_weights('pretrain_weights/ae_mnist_weights.h5')
+    with tf.variable_scope('keras', reuse=False):
+        ae = model_from_json(open('pretrain_weights/ae_mnist.json').read())
+        ae.load_weights('pretrain_weights/ae_mnist_weights.h5')
 
     #load encoder
     load_weight_for_one_layer('encoder', 'layer1', ae, 0, assign_ops)
@@ -99,7 +100,7 @@ def load_pretrain_weight():
     load_weight_for_one_layer('decoder', 'layer1', ae, -4, assign_ops)
     return tf.group(*(op for op in assign_ops),name='load_pretrain_weights')
 
-load_weight = load_pretrain_weight()
+
 
 def gamma_output(z, u_p, theta_p, lambda_p):
     Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
@@ -172,25 +173,6 @@ x_hat_flatten = tf.reshape(x_hat, [-1, original_dim])
 loss = vae_loss(real_flatten, x_hat_flatten,z, z_mean, z_log_var, u_p, theta_p, lambda_p)
 gammas = gamma_output(z,u_p, theta_p, lambda_p)
 predicts = tf.argmax(gammas, axis=1)
-# print(loss.shape)
-# b = sess.run(tar_w)
-# a= 1
-# real_flatten = tf.reshape(real, [-1, 784])
-# x_hat_flatten = tf.reshape(x_hat, [-1, 784])
-#
-# epsilon = 1e-10
-# recon_loss = -tf.reduce_sum(
-#     real_flatten * tf.log(epsilon+x_hat_flatten) + (1-real_flatten) * tf.log(epsilon+1-x_hat_flatten),
-#             axis=1
-#         )
-# recon_loss = tf.reduce_mean(recon_loss)
-# recon_loss = tf.losses.mean_squared_error(labels=real, predictions=x_hat)
-# recon_loss = tf.reduce_mean(recon_loss)
-
-
-
-
-
 
 # trainable variables for each network
 T_vars = tf.trainable_variables()
@@ -207,7 +189,7 @@ vade_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(loss, 
 """ train """
 ''' init '''
 # session
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
 # saver
@@ -215,12 +197,7 @@ saver = tf.train.Saver(max_to_keep=5)
 # summary writer
 # Send summary statistics to TensorBoard
 # tf.summary.scalar('Total_loss', loss)
-# tf.summary.scalar('D_loss', d_loss)
-# tf.summary.scalar('C_loss', c_loss)
-# images_form_de = decoder(random_z)
-# images_form_c1 = decoder(z1)
-# images_form_c2 = decoder(z2)
-# # images_form_c3= decoder(z3)
+
 tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
 # tf.summary.image('Generator_image_c2', images_form_c2, 12)
@@ -237,8 +214,10 @@ print('Tensorboard dir: '+logdir)
 
 ''' initialization '''
 sess.run(tf.global_variables_initializer())
+load_weight = load_pretrain_weight()
 sess.run(load_weight) #load pretrain weights
-
+# ae_saver = tf.train.Saver(var_list=en_var+de_var)
+# ae_saver.restore(sess, "pretrain_weights/ae-pretrain-20180406-090422-mnist/checkpoint/model.ckpt")
 
 def gmm_init():
     # imgs = full_data_pool.batch('img')
@@ -263,11 +242,6 @@ def gmm_init():
 
 load_gmm = gmm_init()
 sess.run(load_gmm) #init gmm params
-
-# a,b,c = sess.run([theta_p, u_p, lambda_p])
-# gmm_init()
-    # u_p.set_value(floatX(g.means_.T))
-    # lambda_p.set_value((floatX(g.covars_.T)))
 
 ''' train '''
 batch_epoch = len(data_pool) // (batch_size * n_critic)
@@ -312,24 +286,12 @@ def training(max_it, it_offset):
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
-            # real_ipt = (data_pool.batch('img')+1)/2.
-            # z_ipt =  np.random.normal(size=[batch_size, z_dim])
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_size*batch_epoch) == 0:
-            #     X,Y = full_data_pool.batch(['img','label'])
-            #     X = (X + 1) / 2.
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
-            print('full-acc-EPOCH-%d'%(it//batch_size*batch_epoch),acc[0])
-            # else:
-            # predict_y = sess.run(predicts, feed_dict={real: real_ipt})
-            # acc = cluster_acc(predict_y, y)
-            # print('batch-acc-it%d' % it, acc[0])
-
-
-            #print acc
-
+            print('full-acc-EPOCH-%d'%(it//(batch_size*batch_epoch)),acc[0])
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':
