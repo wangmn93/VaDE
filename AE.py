@@ -8,16 +8,22 @@ import tensorflow as tf
 import models_mnist as models
 import datetime
 import my_utils
+from sklearn import mixture
 
 
 """ param """
-epoch = 100
+epoch = 30
 batch_size = 256
-lr = 2e-4
+lr = 1e-3
 z_dim = 2
 n_critic = 1 #
 n_generator = 1
-gan_type="ae-pretrain"
+
+X, Y = my_utils.load_data('mnist')
+X = np.reshape(X, [70000,28,28,1])
+num_data = 70000
+
+gan_type="ae-pretrain-mnist-3ep"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -47,6 +53,8 @@ recon_loss = -tf.reduce_sum(
     real_flatten * tf.log(epsilon+x_hat_flatten) + (1-real_flatten) * tf.log(epsilon+1-x_hat_flatten),
             axis=1
         )
+
+# recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 recon_loss = tf.reduce_mean(recon_loss)
 
 # trainable variables for each network
@@ -97,6 +105,7 @@ max_it = epoch * batch_epoch
 #     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict={},
 #                              list_of_names=list_of_names, save_dir=save_dir)
 
+
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
     # total_it = it_offset + max_it
@@ -113,6 +122,14 @@ def training(max_it, it_offset):
 
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
+        if it%batch_epoch == 0 and it != 0:
+
+                sample = sess.run(z_mean, feed_dict={real: X})
+                # GaussianMixture(n_components=n_classes,
+                #                 covariance_type=cov_type
+                g = mixture.GMM(n_components=10, covariance_type='diag')
+                g.fit(sample)
+                a = 0
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':

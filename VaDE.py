@@ -19,7 +19,7 @@ from keras import objectives
 
 
 """ param """
-epoch = 3000
+epoch = 200
 batch_size = 100
 # lr = 1e-3
 lr_nn = 0.002
@@ -27,7 +27,7 @@ decay_n = 10
 decay_factor = 0.9
 
 z_dim = 10
-n_centroid = 10
+n_centroid = 14
 original_dim =784
 
 is_pretrain = True
@@ -38,9 +38,10 @@ gan_type="VaDE"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-full_data_pool = my_utils.getFullMNISTDatapool(70000, shift=False)
-X, Y = my_utils.load_data('mnist')
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
@@ -179,6 +180,7 @@ T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
 gmm_var = [var for var in T_vars if var.name.startswith('gmm')]
+log_var_var = [var for var in T_vars if var.name.startswith('encoder/log_var_layer')]
 
 #optimizer
 learning_rate = tf.placeholder(tf.float32, shape=[])
@@ -200,7 +202,17 @@ saver = tf.train.Saver(max_to_keep=5)
 
 tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
-# tf.summary.image('Generator_image_c2', images_form_c2, 12)
+
+
+for i in range(n_centroid):
+    # a =u_p[:,i]
+    u_p_T = tf.reshape(u_p[:,i],[1, z_dim])
+    lambda_p_T = tf.reshape(lambda_p[:,i],[1, z_dim])
+    eps = tf.random_normal(shape=(12, z_dim),
+                       mean=0, stddev=1, dtype=tf.float32)
+    random_z = u_p_T + lambda_p_T * eps
+    image = decoder(random_z)
+    tf.summary.image('Cluster_%d'%i, image, 12)
 # tf.summary.image('Generator_image_c3', images_form_c3, 12)
 
 # tf.summary.histogram('mu_1', mu_1)
@@ -214,11 +226,11 @@ print('Tensorboard dir: '+logdir)
 
 ''' initialization '''
 sess.run(tf.global_variables_initializer())
-load_weight = load_pretrain_weight()
-sess.run(load_weight) #load pretrain weights
-# ae_saver = tf.train.Saver(var_list=en_var+de_var)
-# ae_saver.restore(sess, "pretrain_weights/ae-pretrain-20180406-090422-mnist/checkpoint/model.ckpt")
-
+# load_weight = load_pretrain_weight()
+# sess.run(load_weight) #load pretrain weights
+ae_saver = tf.train.Saver(var_list=en_var+de_var)
+# ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
@@ -234,14 +246,28 @@ def gmm_init():
         theta_p = tf.get_variable('theta_p')
         u_p = tf.get_variable('u_p')
         lambda_p = tf.get_variable('lambda_p')
-        theta_p.assign(np.ones(n_centroid)/float(n_centroid))
+        # theta_p.assign(np.ones(n_centroid)/float(n_centroid))
         op_list.append(theta_p.assign(np.ones(n_centroid)/float(n_centroid)))
         op_list.append(u_p.assign(g.means_.T))
         op_list.append(lambda_p.assign(g.covars_.T))
         return tf.group(*(op for op in op_list),name='gmm_init')
 
+#default init
+def gmm_init2():
+    op_list = []
+    with tf.variable_scope('gmm', reuse=True):
+        theta_p = tf.get_variable('theta_p')
+        u_p = tf.get_variable('u_p')
+        lambda_p = tf.get_variable('lambda_p')
+        op_list.append(theta_p.assign(np.ones(n_centroid) / float(n_centroid)))
+        op_list.append(u_p.assign(np.zeros((z_dim, n_centroid))))
+        op_list.append(lambda_p.assign(np.ones((z_dim, n_centroid))))
+        return tf.group(*(op for op in op_list), name='gmm_init')
+
+
 load_gmm = gmm_init()
 sess.run(load_gmm) #init gmm params
+tf.initialize_variables(log_var_var)
 
 ''' train '''
 batch_epoch = len(data_pool) // (batch_size * n_critic)
@@ -281,6 +307,7 @@ def training(max_it, it_offset):
         #learning rate decay
         if it % (decay_n*batch_epoch) == 0 and it != 0:
             lr_nn = max(lr_nn * decay_factor, 0.0002)
+            print('lr: ', lr_nn)
 
         _ = sess.run([vade_step], feed_dict={real: real_ipt, learning_rate:lr_nn})
         # if it>10000:
@@ -288,10 +315,10 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        if it % (batch_size*batch_epoch) == 0:
+        if it % (batch_epoch) == 0:
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
-            print('full-acc-EPOCH-%d'%(it//(batch_size*batch_epoch)),acc[0])
+            print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':

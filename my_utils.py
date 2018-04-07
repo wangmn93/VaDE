@@ -44,7 +44,7 @@ def load_data(dataset):
 
     return X, Y
 
-def getMNISTDatapool(batch_size, keep=None, shift=True):
+def getMNISTDatapool(batch_size, shift, keep=None):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('MNIST_data',shift=shift)
     else:
@@ -54,7 +54,7 @@ def getMNISTDatapool(batch_size, keep=None, shift=True):
     data_pool = utils.MemoryData({'img': imgs, 'label':y}, batch_size)
     return data_pool
 
-def getFullMNISTDatapool(batch_size, keep=None, shift=True):
+def getFullMNISTDatapool(batch_size, shift, keep=None):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('MNIST_data',shift=shift)
         imgs_t, y_t, num_train_data_t = data.mnist_load('MNIST_data',dataset='test',shift=shift)
@@ -67,7 +67,7 @@ def getFullMNISTDatapool(batch_size, keep=None, shift=True):
     data_pool = utils.MemoryData({'img': np.concatenate((imgs,imgs_t)), 'label':np.concatenate((y,y_t))}, batch_size)
     return data_pool
 
-def getFashion_MNISTDatapool(batch_size, keep=None, shift=True):
+def getFashion_MNISTDatapool(batch_size, shift, keep=None):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('Fashion_MNIST',shift=shift)
     else:
@@ -77,7 +77,7 @@ def getFashion_MNISTDatapool(batch_size, keep=None, shift=True):
     data_pool = utils.MemoryData({'img': imgs, 'label':y}, batch_size)
     return data_pool
 
-def getFullFashion_MNISTDatapool(batch_size, keep=None, shift=True):
+def getFullFashion_MNISTDatapool(batch_size, shift,keep=None):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('Fashion_MNIST',shift=shift)
         imgs_t, y_t, num_train_data_t = data.mnist_load('Fashion_MNIST',dataset='test',shift=shift)
@@ -89,6 +89,13 @@ def getFullFashion_MNISTDatapool(batch_size, keep=None, shift=True):
     imgs_t.shape = imgs_t.shape + (1,)
     data_pool = utils.MemoryData({'img': np.concatenate((imgs,imgs_t)), 'label':np.concatenate((y,y_t))}, batch_size)
     return data_pool
+
+def loadFullFashion_MNSIT(shift):
+    imgs, y, num_train_data = data.mnist_load('Fashion_MNIST', shift=shift)
+    imgs_t, y_t, num_train_data_t = data.mnist_load('Fashion_MNIST', dataset='test', shift=shift)
+    imgs.shape = imgs.shape + (1,)
+    imgs_t.shape = imgs_t.shape + (1,)
+    return np.concatenate((imgs, imgs_t)), np.concatenate((y, y_t))
 
 def getOnehot(labels, depth):
     onehot_labels = tf.one_hot(indices=labels, depth=depth)
