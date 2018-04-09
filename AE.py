@@ -13,9 +13,9 @@ from sklearn import mixture
 
 """ param """
 epoch = 30
-batch_size = 256
+batch_size = 100
 lr = 1e-3
-z_dim = 2
+z_dim = 10
 n_critic = 1 #
 n_generator = 1
 
@@ -28,8 +28,8 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 ''' data '''
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
-# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 
 """ graphs """
 encoder = models.encoder
@@ -122,14 +122,14 @@ def training(max_it, it_offset):
 
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        if it%batch_epoch == 0 and it != 0:
-
-                sample = sess.run(z_mean, feed_dict={real: X})
-                # GaussianMixture(n_components=n_classes,
-                #                 covariance_type=cov_type
-                g = mixture.GMM(n_components=10, covariance_type='diag')
-                g.fit(sample)
-                a = 0
+        # if it%batch_epoch == 0 and it != 0:
+        #
+        #         sample = sess.run(z_mean, feed_dict={real: X})
+        #         # GaussianMixture(n_components=n_classes,
+        #         #                 covariance_type=cov_type
+        #         g = mixture.GMM(n_components=10, covariance_type='diag')
+        #         g.fit(sample)
+        #         a = 0
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':

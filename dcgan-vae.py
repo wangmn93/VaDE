@@ -33,7 +33,7 @@ gan_type="dcgan-vae"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-data_pool = my_utils.get_FullCifar10Datapool(batch_size, shift=True) # -1 ~ 1
+data_pool = my_utils.get_FullCifar10Datapool(batch_size, shift=False) # -1 ~ 1
 # X,Y = my_utils.load_full_cifar_10(shift=True)
 # # X, Y = my_utils.load_data('mnist')
 # X = np.reshape(X, [70000,28,28,1])
@@ -43,7 +43,7 @@ data_pool = my_utils.get_FullCifar10Datapool(batch_size, shift=True) # -1 ~ 1
 
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
-decoder = models.decoder
+decoder = models.decoder2
 import models_mnist
 sampleing = models_mnist.sampleing
 optimizer = tf.train.AdamOptimizer
@@ -63,9 +63,16 @@ x_hat = decoder(z, reuse=False)
 real_flatten = tf.reshape(real, [-1, 3072])
 x_hat_flatten = tf.reshape(x_hat, [-1, 3072])
 
-pixel_loss =  tf.reduce_sum( tf.square( x_hat_flatten - real_flatten ) , 1 )
-pixel_loss = pixel_loss / 3072.0
-recon_loss = tf.reduce_mean(pixel_loss)
+# pixel_loss =  tf.reduce_sum( tf.square( x_hat_flatten - real_flatten ) , 1 )
+# pixel_loss = pixel_loss / 3072.0
+# recon_loss = tf.reduce_mean(pixel_loss)
+
+epsilon = 1e-10
+recon_loss = -tf.reduce_sum(
+    real_flatten * tf.log(epsilon+x_hat_flatten) + (1-real_flatten) * tf.log(epsilon+1-x_hat_flatten),
+            axis=1
+        )
+recon_loss = tf.reduce_mean(recon_loss)
 # recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 # recon_loss = tf.reduce_mean(recon_loss)
 

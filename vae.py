@@ -19,7 +19,7 @@ from keras import objectives
 
 
 """ param """
-epoch = 10
+epoch = 30
 batch_size = 100
 # lr = 1e-3
 lr_nn = 1e-3

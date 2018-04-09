@@ -38,10 +38,10 @@ gan_type="VaDE"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+# X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
@@ -229,8 +229,8 @@ sess.run(tf.global_variables_initializer())
 # load_weight = load_pretrain_weight()
 # sess.run(load_weight) #load pretrain weights
 ae_saver = tf.train.Saver(var_list=en_var+de_var)
-# ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
-ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
+ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+# ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
@@ -266,6 +266,7 @@ def gmm_init2():
 
 
 load_gmm = gmm_init()
+# load_gmm = gmm_init2()
 sess.run(load_gmm) #init gmm params
 tf.initialize_variables(log_var_var)
 
