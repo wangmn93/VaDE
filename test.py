@@ -100,7 +100,7 @@ if 0:
     #
     #     return loss
 
-if 1:
+if 0:
     import matplotlib.pyplot as plt
     import numpy as np
     data_pool = my_utils.getFashion_MNISTDatapool(10)
@@ -110,5 +110,47 @@ if 1:
         plt.imshow(img_2, cmap='gray')
         plt.show()
 
+if 1:
+    # import utils
+    # def unpickle(file):
+    #     import cPickle
+    #     with open(file, 'rb') as fo:
+    #         dict = cPickle.load(fo)
+    #     return dict
+    #
+    # def load_full_cifar_10():
+    #     img =  None
+    #     label = None
+    #     for i in range(1,5):
+    #         if i ==1:
+    #             batch = unpickle('cifar-10-batches-py/data_batch_%d'%i)
+    #             img = batch['data']
+    #             label = batch['labels']
+    #         else:
+    #             batch = unpickle('cifar-10-batches-py/data_batch_%d' % i)
+    #             img = np.concatenate((img,batch['data']))
+    #             label = np.concatenate((label, batch['labels']))
+    #     batch = unpickle('cifar-10-batches-py/test_batch')
+    #     img = np.concatenate((img, batch['data']))
+    #     label = np.concatenate((label, batch['labels']))
+    #     return img/255., label
+    #
+    # def get_FullCifar10Datapool(batch_size):
+    #     imgs, labels = load_full_cifar_10()
+    #     data_pool = utils.MemoryData({'img': imgs, 'label': labels},
+    #                                  batch_size)
+    #     return data_pool
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    data_pool = my_utils.get_FullCifar10Datapool(5, shift=False) #range -1 ~ 1
+    imgs, labels = data_pool.batch()
+    for i in range(len(imgs)):
+        # img = np.reshape(imgs[i], [3, 32, 32])
+        # img = img.transpose([1, 2, 0])
+        plt.imshow(imgs[i])
+        plt.show()
+        print labels[i]
+    a=0
 
 

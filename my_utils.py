@@ -44,6 +44,40 @@ def load_data(dataset):
 
     return X, Y
 
+def unpickle(file):
+    import cPickle
+    with open(file, 'rb') as fo:
+        dict = cPickle.load(fo)
+    return dict
+
+def load_full_cifar_10(shift):
+    img = None
+    label = None
+    for i in range(1, 5):
+        if i == 1:
+            batch = unpickle('cifar-10-batches-py/data_batch_%d' % i)
+            img = batch['data']
+            label = batch['labels']
+        else:
+            batch = unpickle('cifar-10-batches-py/data_batch_%d' % i)
+            img = np.concatenate((img, batch['data']))
+            label = np.concatenate((label, batch['labels']))
+    batch = unpickle('cifar-10-batches-py/test_batch')
+    img = np.concatenate((img, batch['data']))
+    label = np.concatenate((label, batch['labels']))
+    if shift:
+        return img / 127.5 - 1, label
+    else:
+        return img / 255., label
+
+def get_FullCifar10Datapool(batch_size, shift):
+    imgs, labels = load_full_cifar_10(shift)
+    imgs = np.reshape(imgs, [len(imgs), 3, 32, 32])
+    imgs = imgs.transpose([0, 2, 3, 1])
+    data_pool = utils.MemoryData({'img': imgs, 'label': labels},
+                                 batch_size)
+    return data_pool
+
 def getMNISTDatapool(batch_size, shift, keep=None):
     if keep is None:
         imgs, y, num_train_data = data.mnist_load('MNIST_data',shift=shift)
