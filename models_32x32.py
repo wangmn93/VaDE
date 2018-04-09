@@ -29,6 +29,18 @@ def encoder(img, z_dim, dim=64, reuse=True, training=True):
         z_log_sigma_sq = fc(y, z_dim)
         return z_mu, z_log_sigma_sq
 
+def discriminator(img, dim=64, reuse=True, training=True):
+    bn = partial(batch_norm, is_training=training)
+    conv_bn_lrelu = partial(conv, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+
+    with tf.variable_scope('discriminator', reuse=reuse):
+        y = lrelu(conv(img, dim, 5, 2))
+        y = conv_bn_lrelu(y, dim * 2, 5, 2)
+        y = conv_bn_lrelu(y, dim * 4, 5, 2)
+        y = conv_bn_lrelu(y, dim * 8, 5, 2)
+        logit = fc(y, 1)
+        return logit, slim.flatten(y) #return logit and feature layer
+
 
 def decoder(z, dim=64, channels=3, reuse=True, training=True):
     bn = partial(batch_norm, is_training=training)
