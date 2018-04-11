@@ -26,6 +26,8 @@ lr_nn = 0.002
 decay_n = 10
 decay_factor = 0.9
 
+real_vs_fake_ratio = 0.1
+
 z_dim = 10
 n_centroid = 10
 original_dim =784
@@ -51,6 +53,7 @@ num_data = 70000
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
 sampleing = models.sampleing
+discriminator = partial(models.multi_c_discriminator, out_c=n_centroid)
 optimizer = tf.train.AdamOptimizer
 
 #gmm params
@@ -71,7 +74,33 @@ z = sampleing(z_mean, z_log_var)
 #decoder
 x_hat = decoder(z, reuse=False)
 
+#discriminator
+with tf.variable_scope('gmm', reuse=True):
+    theta_p = tf.get_variable('theta_p')
+    u_p = tf.get_variable('u_p')
+    lambda_p = tf.get_variable('lambda_p')
 
+d_loss = 0
+g_loss = 0
+
+r_logit = discriminator(real, reuse=False)
+# onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=n_centroid+1)
+# d_loss_real = tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=r_logit, onehot_labels=onehot_labels_zero))
+# d_loss += d_loss_real
+
+for i in range(n_centroid):
+    u_p_T = tf.reshape(u_p[:,i],[1, z_dim])
+    lambda_p_T = tf.reshape(lambda_p[:,i],[1, z_dim])
+    eps = tf.random_normal(shape=(batch_size, z_dim),
+                       mean=0, stddev=1, dtype=tf.float32)
+    random_z = u_p_T + lambda_p_T * eps
+    image = decoder(random_z)
+    f_logit = discriminator(image)
+    onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i,tf.ones(batch_size)), tf.int32), depth=n_centroid)
+    d_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_logit, onehot_labels=onehot_labels))
+    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_logit, onehot_labels=onehot_labels))
+
+g_loss = g_loss*0.01
 
 def load_weight_for_one_layer(scope, target_layer, src_model, src_layer_index, op_list):
     src_weights = src_model.layers[src_layer_index].get_weights()
@@ -179,15 +208,16 @@ predicts = tf.argmax(gammas, axis=1)
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
+dis_var = [var for var in T_vars if var.name.startswith('discriminator')]
 gmm_var = [var for var in T_vars if var.name.startswith('gmm')]
-log_var_var = [var for var in T_vars if var.name.startswith('encoder/log_var_layer')]
+# log_var_var = [var for var in T_vars if var.name.startswith('encoder/log_var_layer')]
 
 #optimizer
 learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 vade_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(loss, var_list=en_var+de_var+gmm_var, global_step=global_step)
-
-
+dis_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(d_loss, var_list=dis_var)
+g_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(g_loss, var_list=gmm_var)
 """ train """
 ''' init '''
 # session
@@ -198,7 +228,8 @@ sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 saver = tf.train.Saver(max_to_keep=5)
 # summary writer
 # Send summary statistics to TensorBoard
-# tf.summary.scalar('Total_loss', loss)
+tf.summary.scalar('total_loss', loss)
+tf.summary.scalar('d_loss', d_loss)
 
 tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
@@ -269,7 +300,7 @@ def gmm_init2():
 load_gmm = gmm_init()
 # load_gmm = gmm_init2()
 sess.run(load_gmm) #init gmm params
-tf.initialize_variables(log_var_var)
+# tf.initialize_variables(log_var_var)
 
 ''' train '''
 batch_epoch = len(data_pool) // (batch_size * n_critic)
@@ -310,8 +341,10 @@ def training(max_it, it_offset):
         if it % (decay_n*batch_epoch) == 0 and it != 0:
             lr_nn = max(lr_nn * decay_factor, 0.0002)
             print('lr: ', lr_nn)
-
-        _ = sess.run([vade_step], feed_dict={real: real_ipt, learning_rate:lr_nn})
+        _ = sess.run([vade_step], feed_dict={real: real_ipt, learning_rate: lr_nn})
+        _ = sess.run([dis_step], feed_dict={learning_rate: lr_nn})
+        # if it %100:
+        _ = sess.run([g_step], feed_dict={learning_rate:lr_nn})
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :

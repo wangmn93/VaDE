@@ -18,7 +18,7 @@ epoch = 10
 batch_size = 64
 lr_nn = 2e-4
 z_dim = 100
-gamma = 1e-2
+gamma = 1e-5
 
 n_critic = 1 #
 n_generator = 1

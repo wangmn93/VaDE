@@ -48,8 +48,8 @@ num_data = 70000
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
 
 """ graphs """
-encoder = partial(models.encoder, z_dim = z_dim)
-decoder = models.decoder
+encoder = partial(models.dc_encoder, z_dim = z_dim)
+decoder = models.dc_decoder
 sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
 
@@ -73,33 +73,33 @@ x_hat = decoder(z, reuse=False)
 
 
 
-def load_weight_for_one_layer(scope, target_layer, src_model, src_layer_index, op_list):
-    src_weights = src_model.layers[src_layer_index].get_weights()
-    src_w = src_weights[0]
-    src_b = src_weights[1]
-    with tf.variable_scope(scope, reuse=True):
-        tar_w = tf.get_variable(target_layer+'/'+'weights')
-        tar_b = tf.get_variable(target_layer + '/' + 'biases')
-        op_list.append(tar_w.assign(src_w))
-        op_list.append(tar_b.assign(src_b))
+# def load_weight_for_one_layer(scope, target_layer, src_model, src_layer_index, op_list):
+#     src_weights = src_model.layers[src_layer_index].get_weights()
+#     src_w = src_weights[0]
+#     src_b = src_weights[1]
+#     with tf.variable_scope(scope, reuse=True):
+#         tar_w = tf.get_variable(target_layer+'/'+'weights')
+#         tar_b = tf.get_variable(target_layer + '/' + 'biases')
+#         op_list.append(tar_w.assign(src_w))
+#         op_list.append(tar_b.assign(src_b))
 
-def load_pretrain_weight():
-    assign_ops = []
-    with tf.variable_scope('keras', reuse=False):
-        ae = model_from_json(open('pretrain_weights/ae_mnist.json').read())
-        ae.load_weights('pretrain_weights/ae_mnist_weights.h5')
-
-    #load encoder
-    load_weight_for_one_layer('encoder', 'layer1', ae, 0, assign_ops)
-    load_weight_for_one_layer('encoder', 'layer2', ae, 1, assign_ops)
-    load_weight_for_one_layer('encoder', 'layer3', ae, 2, assign_ops)
-    load_weight_for_one_layer('encoder', 'mean_layer', ae, 3, assign_ops)
-    #load decoder
-    load_weight_for_one_layer('decoder', 'output_layer', ae, -1, assign_ops)
-    load_weight_for_one_layer('decoder', 'layer3', ae, -2, assign_ops)
-    load_weight_for_one_layer('decoder', 'layer2', ae, -3, assign_ops)
-    load_weight_for_one_layer('decoder', 'layer1', ae, -4, assign_ops)
-    return tf.group(*(op for op in assign_ops),name='load_pretrain_weights')
+# def load_pretrain_weight():
+#     assign_ops = []
+#     with tf.variable_scope('keras', reuse=False):
+#         ae = model_from_json(open('pretrain_weights/ae_mnist.json').read())
+#         ae.load_weights('pretrain_weights/ae_mnist_weights.h5')
+#
+#     #load encoder
+#     load_weight_for_one_layer('encoder', 'layer1', ae, 0, assign_ops)
+#     load_weight_for_one_layer('encoder', 'layer2', ae, 1, assign_ops)
+#     load_weight_for_one_layer('encoder', 'layer3', ae, 2, assign_ops)
+#     load_weight_for_one_layer('encoder', 'mean_layer', ae, 3, assign_ops)
+#     #load decoder
+#     load_weight_for_one_layer('decoder', 'output_layer', ae, -1, assign_ops)
+#     load_weight_for_one_layer('decoder', 'layer3', ae, -2, assign_ops)
+#     load_weight_for_one_layer('decoder', 'layer2', ae, -3, assign_ops)
+#     load_weight_for_one_layer('decoder', 'layer1', ae, -4, assign_ops)
+#     return tf.group(*(op for op in assign_ops),name='load_pretrain_weights')
 
 
 
@@ -180,7 +180,7 @@ T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
 gmm_var = [var for var in T_vars if var.name.startswith('gmm')]
-log_var_var = [var for var in T_vars if var.name.startswith('encoder/log_var_layer')]
+# log_var_var = [var for var in T_vars if var.name.startswith('encoder/log_var_layer')]
 
 #optimizer
 learning_rate = tf.placeholder(tf.float32, shape=[])
@@ -211,7 +211,7 @@ for i in range(n_centroid):
     eps = tf.random_normal(shape=(12, z_dim),
                        mean=0, stddev=1, dtype=tf.float32)
     random_z = u_p_T + lambda_p_T * eps
-    image = decoder(random_z)
+    image = decoder(random_z, training=False)
     tf.summary.image('Cluster_%d'%i, image, 12)
 # tf.summary.image('Generator_image_c3', images_form_c3, 12)
 
@@ -229,7 +229,7 @@ sess.run(tf.global_variables_initializer())
 # load_weight = load_pretrain_weight()
 # sess.run(load_weight) #load pretrain weights
 ae_saver = tf.train.Saver(var_list=en_var+de_var)
-ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+ae_saver.restore(sess, "results/dcgan-vae-20180410-174127/checkpoint/model.ckpt")
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
 def gmm_init():
@@ -269,7 +269,7 @@ def gmm_init2():
 load_gmm = gmm_init()
 # load_gmm = gmm_init2()
 sess.run(load_gmm) #init gmm params
-tf.initialize_variables(log_var_var)
+# tf.initialize_variables(log_var_var)
 
 ''' train '''
 batch_epoch = len(data_pool) // (batch_size * n_critic)

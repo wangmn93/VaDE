@@ -7,58 +7,47 @@ import tensorflow as tf
 import models_mnist as models
 import datetime
 import my_utils
-from keras.models import model_from_json
 from functools import partial
-import data_mnist as data
-from sklearn import mixture
+
 import numpy as np
-import  theano.tensor as T
-from keras import backend as K
-import math
-from keras import objectives
+
 
 
 """ param """
-epoch = 200
-batch_size = 100
+epoch = 10
+batch_size = 64
 # lr = 1e-3
-lr_nn = 1e-3
-decay_n = 10
-decay_factor = 0.9
+lr_nn = 2e-4
+# decay_n = 10
+# decay_factor = 0.9
 
 z_dim = 10
 # n_centroid = 10
-# original_dim =784
+original_dim =784
 
 is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="vae-fmnist"
+gan_type="dcgan-vae"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-# full_data_pool = my_utils.getFullMNISTDatapool(70000, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
-X = np.reshape(X, [70000,28,28,1])
-num_data = 70000
+# data_pool = my_utils.get_FullCifar10Datapool(batch_size, shift=False) # -1 ~ 1
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
+# X,Y = my_utils.load_full_cifar_10(shift=True)
+# # X, Y = my_utils.load_data('mnist')
+# X = np.reshape(X, [70000,28,28,1])
+# num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
 
 """ graphs """
-encoder = partial(models.encoder, z_dim = z_dim)
-decoder = models.decoder
-sampleing = models.sampleing
+encoder = partial(models.dc_encoder, z_dim = z_dim)
+decoder = models.dc_decoder
+import models_mnist
+sampleing = models_mnist.sampleing
 optimizer = tf.train.AdamOptimizer
-
-#gmm params
-# with tf.variable_scope('gmm', reuse=False):
-#     tf.get_variable("theta_p", [n_centroid], dtype=tf.float32)
-#     tf.get_variable("u_p", [z_dim, n_centroid], dtype=tf.float32)
-#     tf.get_variable("lambda_p", [z_dim, n_centroid], dtype=tf.float32)
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
@@ -72,18 +61,22 @@ z = sampleing(z_mean, z_log_var)
 #decoder
 x_hat = decoder(z, reuse=False)
 
-real_flatten = tf.reshape(real, [-1, 784])
-x_hat_flatten = tf.reshape(x_hat, [-1, 784])
+real_flatten = tf.reshape(real, [-1, original_dim])
+x_hat_flatten = tf.reshape(x_hat, [-1, original_dim])
 
+# pixel_loss =  tf.reduce_sum( tf.square( x_hat_flatten - real_flatten ) , 1 )
+# pixel_loss = pixel_loss / 3072.0
+# recon_loss = tf.reduce_mean(pixel_loss)
 
-# recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
-# recon_loss = tf.reduce_mean(recon_loss)
 epsilon = 1e-10
 recon_loss = -tf.reduce_sum(
     real_flatten * tf.log(epsilon+x_hat_flatten) + (1-real_flatten) * tf.log(epsilon+1-x_hat_flatten),
             axis=1
         )
 recon_loss = tf.reduce_mean(recon_loss)
+# recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
+# recon_loss = tf.reduce_mean(recon_loss)
+
 
 # Latent loss
 # Kullback Leibler divergence: measure the difference between two distributions
@@ -103,7 +96,7 @@ de_var = [var for var in T_vars if var.name.startswith('decoder')]
 
 #optimizer
 global_step = tf.Variable(0, name='global_step',trainable=False)
-vae_step = optimizer(learning_rate=lr_nn).minimize(loss, var_list=en_var+de_var, global_step=global_step)
+vae_step = optimizer(learning_rate=lr_nn, beta1=0.5).minimize(loss, var_list=en_var+de_var, global_step=global_step)
 
 
 """ train """
@@ -118,7 +111,16 @@ saver = tf.train.Saver(max_to_keep=5)
 # Send summary statistics to TensorBoard
 tf.summary.scalar('Total_loss', loss)
 tf.summary.image('Real', real, 12)
-tf.summary.image('Recon', x_hat, 12)
+def get_sampler(real):
+    # encoder
+    z_mean_s, z_log_var_s = encoder(real, training=False)
+    # sampleing
+    z_s = sampleing(z_mean_s, z_log_var_s)
+    # decoder
+    x_hat_s = decoder(z_s, training=False)
+    return x_hat_s
+
+tf.summary.image('Recon', get_sampler(real), 12)
 
 merged = tf.summary.merge_all()
 logdir = dir+"/tensorboard"
@@ -139,13 +141,6 @@ def training(max_it, it_offset):
     for it in range(it_offset, it_offset + max_it):
         # for i in range(n_critic):
         real_ipt, y = data_pool.batch(['img','label'])
-        # real_ipt = (real_ipt+1)/2.
-
-        global lr_nn
-        #learning rate decay
-        # if it % (decay_n*batch_epoch) == 0 and it != 0:
-        #     lr_nn = max(lr_nn * decay_factor, 0.0002)
-        #     print('lr: ', lr_nn)
 
         _ = sess.run([vae_step], feed_dict={real: real_ipt})
         # if it>10000:
@@ -153,15 +148,15 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        if it % (10*batch_epoch) == 0:
-            sample = sess.run(z_mean, feed_dict={real: X})
-            # GaussianMixture(n_components=n_classes,
-            #                 covariance_type=cov_type
-            # g = mixture.GMM(n_components=10, covariance_type='diag')
-            # g.fit(sample)
-            print('max: ',np.amax(sample))
-            print('min: ', np.amin(sample))
-            a = 0
+        # if it % (10*batch_epoch) == 0:
+        #     sample = sess.run(z_mean, feed_dict={real: X})
+        #     # GaussianMixture(n_components=n_classes,
+        #     #                 covariance_type=cov_type
+        #     # g = mixture.GMM(n_components=10, covariance_type='diag')
+        #     # g.fit(sample)
+        #     print('max: ',np.amax(sample))
+        #     print('min: ', np.amin(sample))
+        #     a = 0
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':
