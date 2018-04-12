@@ -92,3 +92,51 @@ def multi_c_discriminator(x, out_c=11,reuse=True, name = "discriminator"):
         y = fc_lrelu(y, 1024)
         return fc(y, out_c)
 
+# selective sampling
+def ss_generator(z, reuse=True, name="generator", training=True):
+    bn = partial(batch_norm, is_training=training)
+    # fc_relu = partial(fc, normalizer_fn=None, activation_fn=relu)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 1024)
+        y = tf.sigmoid(fc(y, 784))
+        y = tf.reshape(y, [-1, 28, 28, 1])
+        return y
+
+def ss_discriminator(x, reuse=True, name = "discriminator"):
+    fc_lrelu = partial(fc, normalizer_fn=None, activation_fn=lrelu)
+    with tf.variable_scope(name, reuse=reuse):
+        y =  tf.reshape(x, [-1, 784])
+        y = fc_lrelu(y, 1024)
+        return fc(y, 1)
+
+def ss_generator_m(z, heads=10,reuse=True, name = "generator", training = True):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 1024)
+        y = fc_bn_relu(y, 1024)
+        img_sets = []
+        for _ in range(heads):
+            out = tf.sigmoid(fc(y, 784))
+            out = tf.reshape(out, [-1, 28, 28, 1])
+            img_sets.append(out)
+        return img_sets
+
+def generator_m(z, heads=10, dim=64, reuse=True, training=True, name="generator"):
+    bn = partial(batch_norm, is_training=training)
+    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 1024)
+        y = fc_bn_relu(y, 7 * 7 * dim * 2)
+        y = tf.reshape(y, [-1, 7, 7, dim * 2])
+        y = dconv_bn_relu(y, dim * 2, 5, 2)
+        img_sets = []
+        for _ in range(heads):
+            img_sets.append(tf.sigmoid(dconv(y, 1, 5, 2)))
+
+        return img_sets
+
+

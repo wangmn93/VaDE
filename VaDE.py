@@ -16,7 +16,9 @@ import  theano.tensor as T
 from keras import backend as K
 import math
 from keras import objectives
-
+from sklearn.manifold import TSNE
+# from sklearn import mixture
+import matplotlib.pyplot as plt
 
 """ param """
 epoch = 200
@@ -47,6 +49,15 @@ num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
 
+test_data = [[], [], [], [], [], [], [], [], [], []]
+colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
+plt.ion() # enables interactive mode
+for i, j in zip(X, Y):
+    if len(test_data[j]) < 500:
+        test_data[j].append(i)
+test_data_list = test_data[0]
+for i in range(1,10):
+    test_data_list = np.concatenate((test_data_list, test_data[i]))
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
@@ -232,6 +243,7 @@ ae_saver = tf.train.Saver(var_list=en_var+de_var)
 ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
+# ae_saver.restore(sess, 'results/vae-fmnist-20180411-182245/checkpoint/model.ckpt')
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
@@ -321,6 +333,17 @@ def training(max_it, it_offset):
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+
+            plt.clf()
+            sample = sess.run(z_mean, feed_dict={real: test_data_list})
+            X_embedded = TSNE(n_components=2).fit_transform(sample)
+            for i in range(10):
+                plt.scatter(X_embedded[i * 100:(i + 1) * 100, 0], X_embedded[i * 100:(i + 1) * 100, 1], color=colors[i],
+                            label=str(i), s=2)
+                plt.draw()
+                if i == 9:
+                    plt.legend(loc='best')
+            plt.show()
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':

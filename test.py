@@ -110,7 +110,7 @@ if 0:
         plt.imshow(img_2, cmap='gray')
         plt.show()
 
-if 1:
+if 0:
     # import utils
     # def unpickle(file):
     #     import cPickle
@@ -152,5 +152,20 @@ if 1:
         plt.show()
         print labels[i]
     a=0
+
+if 0:
+    import numpy as np
+    X, Y = my_utils.load_data('mnist')
+    X = np.reshape(X, [70000, 28, 28, 1])
+    num_data = 70000
+    test_data = [[], [], [], [], [], [], [], [], [], []]
+    for i, j in zip(X, Y):
+        if len(test_data[j]) < 100:
+            test_data[j].append(i)
+    import matplotlib.pyplot as plt
+    for img in test_data[0]:
+        img = np.reshape(img, [28, 28])
+        plt.imshow(img, cmap='gray')
+        plt.show()
 
 

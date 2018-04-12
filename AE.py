@@ -8,11 +8,13 @@ import tensorflow as tf
 import models_mnist as models
 import datetime
 import my_utils
+from sklearn.manifold import TSNE
 from sklearn import mixture
-
+import matplotlib.pyplot as plt
+from functools import partial
 
 """ param """
-epoch = 30
+epoch = 200
 batch_size = 100
 lr = 1e-3
 z_dim = 10
@@ -23,16 +25,28 @@ X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 
-gan_type="ae-pretrain-mnist-3ep"
+#prepare data for plot
+test_data = [[], [], [], [], [], [], [], [], [], []]
+colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
+#             0       1       2       3        4          5        6        7         8       9
+plt.ion() # enables interactive mode
+for i, j in zip(X, Y):
+    if len(test_data[j]) < 100:
+        test_data[j].append(i)
+
+test_data_list = test_data[0]
+for i in range(1,10):
+    test_data_list = np.concatenate((test_data_list, test_data[i]))
+gan_type="ae"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
+# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 
 """ graphs """
-encoder = models.encoder
+encoder = partial(models.encoder, z_dim=z_dim)
 decoder = models.decoder
 optimizer = tf.train.AdamOptimizer
 
@@ -122,14 +136,27 @@ def training(max_it, it_offset):
 
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        # if it%batch_epoch == 0 and it != 0:
-        #
-        #         sample = sess.run(z_mean, feed_dict={real: X})
-        #         # GaussianMixture(n_components=n_classes,
-        #         #                 covariance_type=cov_type
-        #         g = mixture.GMM(n_components=10, covariance_type='diag')
-        #         g.fit(sample)
-        #         a = 0
+        if it%(5*batch_epoch) == 0 and it != 0:
+            i = 0
+            plt.clf()
+            sample = sess.run(z_mean, feed_dict={real: test_data_list})
+            X_embedded = TSNE(n_components=2).fit_transform(sample)
+            for i in range(10):
+                plt.scatter(X_embedded[i*100:(i+1)*100, 0], X_embedded[i*100:(i+1)*100, 1], color=colors[i], label=str(i), s=2)
+            # for test_d in test_data:
+            #     sample = sess.run(z_mean, feed_dict={real: test_d})
+            #     # X_embedded = sample
+            #     X_embedded = TSNE(n_components=2).fit_transform(sample)
+            #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
+            #     i += 1
+                plt.draw()
+            # plt.legend(loc='best')
+            plt.show()
+                # GaussianMixture(n_components=n_classes,
+                #                 covariance_type=cov_type
+                # g = mixture.GMM(n_components=10, covariance_type='diag')
+                # g.fit(sample)
+                # a = 0
 
     var = raw_input("Continue training for %d iterations?" % max_it)
     if var.lower() == 'y':

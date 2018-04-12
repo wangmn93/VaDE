@@ -44,6 +44,20 @@ def load_data(dataset):
 
     return X, Y
 
+def getTest_data(numPerClass=500):
+    test_data = [[], [], [], [], [], [], [], [], [], []]
+    # colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
+    # plt.ion()  # enables interactive mode
+    X, Y = load_data('mnist')
+    X = np.reshape(X, [70000, 28, 28, 1])
+    for i, j in zip(X, Y):
+        if len(test_data[j]) < numPerClass:
+            test_data[j].append(i)
+    test_data_list = test_data[0]
+    for i in range(1, 10):
+        test_data_list = np.concatenate((test_data_list, test_data[i]))
+    return test_data_list, numPerClass
+
 def unpickle(file):
     import cPickle
     with open(file, 'rb') as fo:

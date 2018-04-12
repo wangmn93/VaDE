@@ -19,14 +19,14 @@ from keras import objectives
 
 
 """ param """
-epoch = 200
+epoch = 70
 batch_size = 100
 # lr = 1e-3
 lr_nn = 1e-3
 decay_n = 10
 decay_factor = 0.9
 
-z_dim = 10
+z_dim = 100
 # n_centroid = 10
 # original_dim =784
 
@@ -38,11 +38,11 @@ gan_type="vae-fmnist"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 # full_data_pool = my_utils.getFullMNISTDatapool(70000, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
+# X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
