@@ -35,7 +35,7 @@ is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="dec-mad"
+gan_type="dec"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
@@ -55,8 +55,6 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-generator = partial(models.generator_m, heads=10)
-discriminator = models.ss_discriminator
 sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
 
@@ -93,33 +91,17 @@ recon_loss = -tf.reduce_sum(
 # recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 recon_loss = tf.reduce_mean(recon_loss)
 
-
-#=====================
-z = tf.random_normal(shape=(batch_size, z_dim),
-                       mean=0, stddev=1, dtype=tf.float32)
-# z =  tf.placeholder(tf.float32, shape=[None, z_dim])
-fake_set = generator(z, reuse=False)
-fake = tf.concat(fake_set, 0)
-r_logit = discriminator(real,reuse=False)
-f_logit = discriminator(fake)
-
-d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
-d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
-d_loss = d_loss_real + 0.1*d_loss_fake
-# g_loss = 0
-g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
-
-
 def compute_soft_assign(z):
     with tf.variable_scope('kmean', reuse=True):
         theta_p = tf.get_variable('u_p')
-    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / 1.))
-    q **= (1. + 1.0) / 2.0
+    alpha = 1.
+    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / alpha))
+    q **= (alpha + 1.0) / 2.0
     q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
     return q
 
 def target_distribution2(q):
-    weight = q ** 1.5 / tf.reduce_sum(q, axis=0)
+    weight = q ** 2 / tf.reduce_sum(q, axis=0)
     return tf.transpose(tf.transpose(weight)/ tf.reduce_sum(q, axis=1))
 
 # def target_distribution(gamma):
@@ -128,32 +110,32 @@ def target_distribution2(q):
 #     temp = temp/tf.reduce_sum(temp, axis=1, keep_dims=True)
 #     return temp
 
-def KL(P,Q):
-    return tf.reduce_sum(P * tf.log(P/Q), [0,1])
+def KL(P,Q, threshold):
+    temp = tf.reduce_sum(P * tf.log(P/Q), axis=1)
+    mask = create_mask(Q,threshold)
+    temp = temp * mask
+    return tf.reduce_sum(temp, axis=0)
+
+def entropy(q):
+    return tf.reduce_sum(-q*tf.log(q), axis=1)
+
+entropy_threshold = tf.placeholder(tf.float32, shape=[])
+
+def create_mask(q,threshold):
+    ent = entropy(q)
+    mask = tf.to_int32(ent < threshold)
+    mask = tf.to_float(mask)
+    return mask
 
 q = compute_soft_assign(z_mean)
 predicts = tf.argmax(q, axis=1)
+avg_entropy = tf.reduce_mean(entropy(q))
+min_entropy = tf.reduce_min(entropy(q))
+max_entropy = tf.reduce_max(entropy(q))
 print('soft dist: ',q.shape)
 t = target_distribution2(q)
 print('target dist: ',t.shape)
-KL_loss = KL(t, q)
-beta = 0.01
-KL_recon_loss = beta*KL_loss + recon_loss
-
-f_logit_set = []
-g_loss = 0.5*g_loss
-for i in range(len(fake_set)):
-    onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
-    f_m, _ = encoder(fake_set[i])
-    f_l = compute_soft_assign(f_m)
-    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
-
-# onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=10)
-
-# f_mean, _ =  encoder(fake)
-# mimic_logit = compute_soft_assign(f_mean)
-# mimic_loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=mimic_logit, onehot_labels=onehot_labels))
-#  + mimic_loss
+KL_loss = KL(t, q, entropy_threshold)
 
 # trainable variables for each network
 T_vars = tf.trainable_variables()
@@ -161,20 +143,13 @@ en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
 kmean_var = [var for var in T_vars if var.name.startswith('kmean')]
 
-g_var = [var for var in T_vars if var.name.startswith('generator')]
-dis_var = [var for var in T_vars if var.name.startswith('discriminator')]
-
 
 #optimizer
 learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=learning_rate).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-kl_step = tf.train.MomentumOptimizer(learning_rate=0.0002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
+kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
 
-d_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(d_loss, var_list=dis_var)
-g_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(g_loss, var_list=g_var)
-# recon_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(recon_loss, var_list=de_var+en_var)
-# kl_recon_step = tf.train.AdamOptimizer(learning_rate=0.002).minimize(KL_recon_loss, var_list=de_var+en_var)
 """ train """
 ''' init '''
 # session
@@ -185,30 +160,10 @@ sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 saver = tf.train.Saver(max_to_keep=5)
 # summary writer
 # Send summary statistics to TensorBoard
-tf.summary.scalar('d_loss', d_loss)
-tf.summary.scalar('g_loss', g_loss)
+# tf.summary.scalar('Total_loss', loss)
+
 tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
-
-# image = generator(z, training=False)
-# tf.summary.image('G', image, 12)
-image_sets = generator(z, training= False)
-for img_set in image_sets:
-    tf.summary.image('G_images', img_set, 12)
-# for i in range(n_centroid):
-#     # a =u_p[:,i]
-#     u_p_T = tf.reshape(u_p[:,i],[1, z_dim])
-#     lambda_p_T = tf.reshape(lambda_p[:,i],[1, z_dim])
-#     eps = tf.random_normal(shape=(12, z_dim),
-#                        mean=0, stddev=1, dtype=tf.float32)
-#     random_z = u_p_T + lambda_p_T * eps
-#     image = decoder(random_z)
-#     tf.summary.image('Cluster_%d'%i, image, 12)
-# tf.summary.image('Generator_image_c3', images_form_c3, 12)
-
-# tf.summary.histogram('mu_1', mu_1)
-# tf.summary.histogram('mu_2', mu_2)
-# tf.summary.histogram('mu_3', mu_3)
 
 merged = tf.summary.merge_all()
 logdir = dir+"/tensorboard"
@@ -223,6 +178,7 @@ sess.run(tf.global_variables_initializer())
 # ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
+last_y_pred = None
 def kmean_init():
     from sklearn.cluster import KMeans
 
@@ -231,6 +187,8 @@ def kmean_init():
 
     sample = sess.run(z_mean, feed_dict={real:X})
     kmeans = KMeans(n_clusters=n_centroid, n_init=20).fit(sample)
+    global last_y_pred
+    last_y_pred = kmeans.predict(sample)
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
     # g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
@@ -318,8 +276,10 @@ def pretrain(epochs):
     #     # sample_once(it_offset + max_it)
     #     print("Save sample images")
     #     training(max_it, it_offset + max_it)
-tsne = TSNE(n_components=2)
+# var_grad = tf.gradients(KL_loss, kmean_var)[0]
+threshold = 5.
 def training(max_it, it_offset):
+
     print("Max iteration: " + str(max_it))
     # total_it = it_offset + max_it
     for it in range(it_offset, it_offset + max_it):
@@ -332,70 +292,33 @@ def training(max_it, it_offset):
         # if it % (decay_n*batch_epoch) == 0 and it != 0:
         #     lr_nn = max(lr_nn * decay_factor, 0.0002)
         #     print('lr: ', lr_nn)
-        _ = sess.run([kl_step], feed_dict={real: real_ipt})
-        # if it%10 ==0:
-        # _ = sess.run([recon_step], feed_dict={real: real_ipt})
-            # for _ in range(5):
-            #     _ = sess.run([recon_step], feed_dict={real: real_ipt})
+        # var_grad_val = sess.run(var_grad, feed_dict={real: real_ipt})
+        # if it%batch_epoch == 0:
+        # #     global threshold
+        # #     threshold = 0.9
+        #     var = raw_input("input threhold")
+        #     global threshold
+        #     # threshold += 1.2
+        #     # print('thres ',threshold)
+        #     threshold = var
+
+        # if var.lower() == 'y':
+        _ = sess.run([kl_step], feed_dict={real: real_ipt, entropy_threshold:threshold})
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
+            predict_y,avg_e, min_e, max_e = sess.run([predicts, avg_entropy, min_entropy, max_entropy], feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
-            plt.clf()
-            sample = sess.run(z_mean, feed_dict={real: test_data_list})
-            X_embedded = tsne.fit_transform(sample)
-            for i in range(10):
-                plt.scatter(X_embedded[i * numPerClass:(i + 1) * numPerClass, 0],
-                            X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
-                            color=colors[i],
-                            label=str(i), s=2)
-                # for test_d in test_data:
-                #     sample = sess.run(z_mean, feed_dict={real: test_d})
-                #     # X_embedded = sample
-                #     X_embedded = TSNE(n_components=2).fit_transform(sample)
-                #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
-                #     i += 1
-                plt.draw()
-            # plt.legend(loc='best')
-            plt.show()
-#
-#     var = raw_input("Continue training for %d iterations?" % max_it)
-#     if var.lower() == 'y':
-#         # sample_once(it_offset + max_it)
-#         print("Save sample images")
-#         training(max_it, it_offset + max_it)
-def recon_training(max_it, it_offset):
-    print("recon iteration: " + str(max_it))
-    # total_it = it_offset + max_it
-    for it in range(it_offset, it_offset + max_it):
-        # for i in range(n_critic):
-        real_ipt, y = data_pool.batch(['img', 'label'])
-        # real_ipt = (real_ipt+1)/2.
-
-        # global lr_nn
-        # learning rate decay
-        # if it % (decay_n*batch_epoch) == 0 and it != 0:
-        #     lr_nn = max(lr_nn * decay_factor, 0.0002)
-        #     print('lr: ', lr_nn)
-        # _ = sess.run([recon_step], feed_dict={real: real_ipt})
-        # if it%10 ==0:
-        #     _ = sess.run([recon_step], feed_dict={real: real_ipt})
-        # for _ in range(5):
-        #     _ = sess.run([recon_step], feed_dict={real: real_ipt})
-        # if it>10000:
-        #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
-        if it % 10 == 0:
-            summary = sess.run(merged, feed_dict={real: real_ipt})
-            writer.add_summary(summary, it)
-        if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
-            acc = cluster_acc(predict_y, Y)
-            print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+            print('avg entropy',avg_e,'min ent',min_e, 'max ent',max_e)
+            if it>0:
+                global last_y_pred
+                delta_label = np.sum(predict_y != last_y_pred).astype(np.float32) / predict_y.shape[0]
+                print('delta label: ',delta_label)
+                last_y_pred = np.copy(predict_y)
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
             X_embedded = TSNE(n_components=2).fit_transform(sample)
@@ -413,31 +336,34 @@ def recon_training(max_it, it_offset):
                 plt.draw()
             # plt.legend(loc='best')
             plt.show()
+#                   if it%batch_epoch == 0:
 
-def gan_train(max_it, it_offset):
-    print("gan iteration: " + str(max_it))
-    # total_it = it_offset + max_it
-    for it in range(it_offset, it_offset + max_it):
-        real_ipt, y = data_pool.batch(['img', 'label'])
-        # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt})
-        if it % 10 == 0:
-            summary = sess.run(merged, feed_dict={real: real_ipt})
-            writer.add_summary(summary, it)
+#     var = raw_input("Continue training for %d iterations?" % max_it)
+#     if var.lower() == 'y':
+#         # sample_once(it_offset + max_it)
+#         print("Save sample images")
+#         training(max_it, it_offset + max_it)
+
+
+
 total_it = 0
 try:
     # training(max_it,0)
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
-    # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
-    ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')  # ep100 0.824
+    # ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+    # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')#ep200 0.96
+    # ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')#ep100 0.824
+    # ae_saver.restore(sess, 'results/ae-20180412-153851/checkpoint/model.ckpt') #ep200
+    # ae_saver.restore(sess, 'results/ae-20180412-160207/checkpoint/model.ckpt') #
+    # ae_saver.restore(sess, 'results/ae-20180412-173826/checkpoint/model.ckpt') #ep300 0.82
+    ae_saver.restore(sess, 'results/ae-20180412-175908/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
+    # ae_saver.restore(sess, 'results/ae-20180412-190443/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
+    # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
     load_kmean = kmean_init()
     sess.run(load_kmean)
-    training(10*batch_epoch,0)
-    gan_train(max_it, 10*batch_epoch)
-    # recon_training(max_it,0)
+    training(max_it,0)
     # total_it = sess.run(global_step)
     # print("Total iterations: "+str(total_it))
     # for i in range(1):

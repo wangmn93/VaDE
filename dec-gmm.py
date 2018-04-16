@@ -55,17 +55,14 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-sampleing = models.sampleing
+# sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
 
-with tf.variable_scope('kmean', reuse=False):
-    tf.get_variable("u_p", [n_centroid, z_dim], dtype=tf.float32)
-
 #gmm params
-# with tf.variable_scope('gmm', reuse=False):
-#     tf.get_variable("theta_p", [n_centroid], dtype=tf.float32)
-#     tf.get_variable("u_p", [z_dim, n_centroid], dtype=tf.float32)
-#     tf.get_variable("lambda_p", [z_dim, n_centroid], dtype=tf.float32)
+with tf.variable_scope('gmm', reuse=False):
+    tf.get_variable("theta_p", [n_centroid], dtype=tf.float32)
+    tf.get_variable("u_p", [z_dim,n_centroid], dtype=tf.float32)
+    tf.get_variable("lambda_p", [z_dim, n_centroid], dtype=tf.float32)
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
@@ -91,78 +88,88 @@ recon_loss = -tf.reduce_sum(
 # recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 recon_loss = tf.reduce_mean(recon_loss)
 
-# def load_weight_for_one_layer(scope, target_layer, src_model, src_layer_index, op_list):
-#     src_weights = src_model.layers[src_layer_index].get_weights()
-#     src_w = src_weights[0]
-#     src_b = src_weights[1]
-#     with tf.variable_scope(scope, reuse=True):
-#         tar_w = tf.get_variable(target_layer+'/'+'weights')
-#         tar_b = tf.get_variable(target_layer + '/' + 'biases')
-#         op_list.append(tar_w.assign(src_w))
-#         op_list.append(tar_b.assign(src_b))
-#
-# def load_pretrain_weight():
-#     assign_ops = []
-#     with tf.variable_scope('keras', reuse=False):
-#         ae = model_from_json(open('pretrain_weights/ae_mnist.json').read())
-#         ae.load_weights('pretrain_weights/ae_mnist_weights.h5')
-#
-#     #load encoder
-#     load_weight_for_one_layer('encoder', 'layer1', ae, 0, assign_ops)
-#     load_weight_for_one_layer('encoder', 'layer2', ae, 1, assign_ops)
-#     load_weight_for_one_layer('encoder', 'layer3', ae, 2, assign_ops)
-#     load_weight_for_one_layer('encoder', 'mean_layer', ae, 3, assign_ops)
-#     #load decoder
-#     load_weight_for_one_layer('decoder', 'output_layer', ae, -1, assign_ops)
-#     load_weight_for_one_layer('decoder', 'layer3', ae, -2, assign_ops)
-#     load_weight_for_one_layer('decoder', 'layer2', ae, -3, assign_ops)
-#     load_weight_for_one_layer('decoder', 'layer1', ae, -4, assign_ops)
-#     return tf.group(*(op for op in assign_ops),name='load_pretrain_weights')
-#
-#
-#
-# def gamma_output(z, u_p, theta_p, lambda_p):
-#     Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
-#
-#     u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [num_data, 1, 1])
-#     # u_tensor3 = T.repeat(tf.expand_dims(u_p,[0]), batch_size, axis=0)
-#     # lambda_tensor3 = T.repeat(tf.expand_dims(lambda_p,[0]), batch_size, axis=0)
-#     lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [num_data, 1, 1])
-#     temp_theta_p = tf.expand_dims(theta_p, [0])
-#     temp_theta_p = tf.expand_dims(temp_theta_p, [0])
-#     # theta_tensor3 = temp_theta_p * T.ones((batch_size, z_dim, n_centroid))
-#     theta_tensor3 = tf.tile(temp_theta_p, [num_data, z_dim, 1])
-#
-#     # @TODO
-#     # PROBLEM HERE ? add theta z_dim times for each cluster?
-#     p_c_z = K.exp(K.sum((K.log(theta_tensor3) - 0.5 * K.log(2 * math.pi * lambda_tensor3) - \
-#                          K.square(Z - u_tensor3) / (2 * lambda_tensor3)), axis=1)) + 1e-10
-#
-#     gamma = p_c_z / K.sum(p_c_z, axis=-1, keepdims=True)
-#     return gamma
+
 
 def compute_soft_assign(z):
-    with tf.variable_scope('kmean', reuse=True):
-        theta_p = tf.get_variable('u_p')
-    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / 1.))
-    q **= (1. + 1.0) / 2.0
-    q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
-    return q
+    with tf.variable_scope('gmm', reuse=True):
+        theta_p = tf.get_variable("theta_p")
+        u_p = tf.get_variable("u_p")
+        lambda_p = tf.get_variable("lambda_p")
+    # Z = tf.tile(tf.expand_dims(z, [1]), [1, n_centroid, 1])
+    # u_p_tensor = tf.expand_dims(u_p, [0])
+    # lambda_p_tensor = tf.expand_dims(lambda_p, [0])
+    # theta_p_tensor = tf.expand_dims(theta_p, [0])
+    # diff = -0.5*tf.square(Z - u_p_tensor)/lambda_p_tensor
+    # temp = -0.5*tf.log(2 * math.pi * lambda_p_tensor)
+    #     # Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
+    # log_gamma = tf.log(theta_p_tensor) + tf.reduce_sum(temp+diff,axis=2)
+    # gamma = tf.exp(log_gamma)
+    # gamma = gamma/tf.reduce_sum(gamma, axis=1, keep_dims=True)
+    # return gamma
+
+    Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
+
+    u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [num_data, 1, 1])
+    # u_tensor3 = T.repeat(tf.expand_dims(u_p,[0]), batch_size, axis=0)
+    # lambda_tensor3 = T.repeat(tf.expand_dims(lambda_p,[0]), batch_size, axis=0)
+    lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [num_data, 1, 1])
+    temp_theta_p = tf.expand_dims(theta_p, [0])
+    temp_theta_p = tf.expand_dims(temp_theta_p, [0])
+    # theta_tensor3 = temp_theta_p * T.ones((batch_size, z_dim, n_centroid))
+    theta_tensor3 = tf.tile(temp_theta_p, [num_data, z_dim, 1])
+
+    # @TODO
+    # PROBLEM HERE ? add theta z_dim times for each cluster?
+    p_c_z = K.exp(K.sum((K.log(theta_tensor3) - 0.5 * K.log(2 * math.pi * lambda_tensor3) - \
+                         K.square(Z - u_tensor3) / (2 * lambda_tensor3)), axis=1)) + 1e-10
+
+    gamma = p_c_z / K.sum(p_c_z, axis=-1, keepdims=True)
+    return gamma
+
+def compute_soft_assign2(z):
+    with tf.variable_scope('gmm', reuse=True):
+        theta_p = tf.get_variable("theta_p")
+        u_p = tf.get_variable("u_p")
+        lambda_p = tf.get_variable("lambda_p")
+    # Z = tf.tile(tf.expand_dims(z, [1]), [1, n_centroid, 1])
+    # u_p_tensor = tf.expand_dims(u_p, [0])
+    # lambda_p_tensor = tf.expand_dims(lambda_p, [0])
+    # theta_p_tensor = tf.expand_dims(theta_p, [0])
+    # diff = -0.5*tf.square(Z - u_p_tensor)/lambda_p_tensor
+    # temp = -0.5*tf.log(2 * math.pi * lambda_p_tensor)
+    #     # Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
+    # log_gamma = tf.log(theta_p_tensor) + tf.reduce_sum(temp+diff,axis=2)
+    # gamma = tf.exp(log_gamma)
+    # gamma = gamma/tf.reduce_sum(gamma, axis=1, keep_dims=True)
+    # return gamma
+
+    Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
+
+    u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [batch_size, 1, 1])
+    # u_tensor3 = T.repeat(tf.expand_dims(u_p,[0]), batch_size, axis=0)
+    # lambda_tensor3 = T.repeat(tf.expand_dims(lambda_p,[0]), batch_size, axis=0)
+    lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [batch_size, 1, 1])
+    temp_theta_p = tf.expand_dims(theta_p, [0])
+    temp_theta_p = tf.expand_dims(temp_theta_p, [0])
+    # theta_tensor3 = temp_theta_p * T.ones((batch_size, z_dim, n_centroid))
+    theta_tensor3 = tf.tile(temp_theta_p, [batch_size, z_dim, 1])
+
+    # @TODO
+    # PROBLEM HERE ? add theta z_dim times for each cluster?
+    p_c_z = K.exp(K.sum((K.log(theta_tensor3) - 0.5 * K.log(2 * math.pi * lambda_tensor3) - \
+                         K.square(Z - u_tensor3) / (2 * lambda_tensor3)), axis=1)) + 1e-10
+
+    gamma = p_c_z / K.sum(p_c_z, axis=-1, keepdims=True)
+    return gamma
 
 def target_distribution2(q):
     weight = q ** 2 / tf.reduce_sum(q, axis=0)
     return tf.transpose(tf.transpose(weight)/ tf.reduce_sum(q, axis=1))
 
-# def target_distribution(gamma):
-#
-#     temp = tf.square(gamma)/tf.reduce_sum(gamma,axis=0, keep_dims=True)
-#     temp = temp/tf.reduce_sum(temp, axis=1, keep_dims=True)
-#     return temp
-
 def KL(P,Q):
     return tf.reduce_sum(P * tf.log(P/Q), [0,1])
 
-q = compute_soft_assign(z_mean)
+q = compute_soft_assign2(z_mean)
 predicts = tf.argmax(q, axis=1)
 print('soft dist: ',q.shape)
 t = target_distribution2(q)
@@ -173,14 +180,14 @@ KL_loss = KL(t, q)
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
-kmean_var = [var for var in T_vars if var.name.startswith('kmean')]
+gmm_var = [var for var in T_vars if var.name.startswith('gmm')]
 
 
 #optimizer
 learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=learning_rate).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
+kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=gmm_var+en_var)
 
 """ train """
 ''' init '''
@@ -198,20 +205,7 @@ tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
 
 
-# for i in range(n_centroid):
-#     # a =u_p[:,i]
-#     u_p_T = tf.reshape(u_p[:,i],[1, z_dim])
-#     lambda_p_T = tf.reshape(lambda_p[:,i],[1, z_dim])
-#     eps = tf.random_normal(shape=(12, z_dim),
-#                        mean=0, stddev=1, dtype=tf.float32)
-#     random_z = u_p_T + lambda_p_T * eps
-#     image = decoder(random_z)
-#     tf.summary.image('Cluster_%d'%i, image, 12)
-# tf.summary.image('Generator_image_c3', images_form_c3, 12)
 
-# tf.summary.histogram('mu_1', mu_1)
-# tf.summary.histogram('mu_2', mu_2)
-# tf.summary.histogram('mu_3', mu_3)
 
 merged = tf.summary.merge_all()
 logdir = dir+"/tensorboard"
@@ -220,68 +214,33 @@ print('Tensorboard dir: '+logdir)
 
 # ''' initialization '''
 sess.run(tf.global_variables_initializer())
-# load_weight = load_pretrain_weight()
-# sess.run(load_weight) #load pretrain weights
-# ae_saver = tf.train.Saver(var_list=en_var+de_var)
-# ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
-# ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
-# ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
-def kmean_init():
-    from sklearn.cluster import KMeans
 
-    # imgs = full_data_pool.batch('img')
-    # imgs = (imgs + 1) / 2.
 
-    sample = sess.run(z_mean, feed_dict={real:X})
-    kmeans = KMeans(n_clusters=n_centroid, n_init=20).fit(sample)
+def gmm_init():
+        # imgs = full_data_pool.batch('img')
+        # imgs = (imgs + 1) / 2.
+
+    sample = sess.run(z_mean, feed_dict={real: X})
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
-    # g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
-    # g.fit(sample)
+    g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
+    g.fit(sample)
 
-    # op_list = []
-    with tf.variable_scope('kmean', reuse=True):
-        # theta_p = tf.get_variable('theta_p')
+    op_list = []
+    with tf.variable_scope('gmm', reuse=True):
+        theta_p = tf.get_variable('theta_p')
         u_p = tf.get_variable('u_p')
-        # lambda_p = tf.get_variable('lambda_p')
-        # theta_p.assign(np.ones(n_centroid)/float(n_centroid))
-        # op_list.append(theta_p.assign(np.ones(n_centroid)/float(n_centroid)))
-        # op_list.append(u_p.assign(kmeans.cluster_centers_))
-        # op_list.append(lambda_p.assign(g.covars_.T))
-        return u_p.assign(kmeans.cluster_centers_)
+        lambda_p = tf.get_variable('lambda_p')
+            # theta_p.assign(np.ones(n_centroid)/float(n_centroid))
+        op_list.append(theta_p.assign(g.weights_))
+        op_list.append(u_p.assign(g.means_.T))
+        op_list.append(lambda_p.assign(g.covars_.T))
+        return tf.group(*(op for op in op_list), name='gmm_init')
 
-# #default init
-# def gmm_init2():
-#     op_list = []
-#     with tf.variable_scope('gmm', reuse=True):
-#         theta_p = tf.get_variable('theta_p')
-#         u_p = tf.get_variable('u_p')
-#         lambda_p = tf.get_variable('lambda_p')
-#         op_list.append(theta_p.assign(np.ones(n_centroid) / float(n_centroid)))
-#         op_list.append(u_p.assign(np.zeros((z_dim, n_centroid))))
-#         op_list.append(lambda_p.assign(np.ones((z_dim, n_centroid))))
-#         return tf.group(*(op for op in op_list), name='gmm_init')
-
-
-# load_gmm = gmm_init()
-# load_gmm = gmm_init2()
-# sess.run(load_gmm) #init gmm params
-# tf.initialize_variables(log_var_var)
 
 ''' train '''
 batch_epoch = len(data_pool) // (batch_size * n_critic)
 max_it = epoch * batch_epoch
-
-# def sample_once(it):
-#     rows = 10
-#     columns = 10
-#     feed = {random_z: np.random.normal(size=[rows*columns, z_dim])}
-#     list_of_generators = [images_form_de, images_form_c1, images_form_c2]  # used for sampling images
-#     list_of_names = ['it%d-de.jpg' % it, 'it%d-c1.jpg' % it, 'it%d-c2.jpg' % it]
-#     save_dir = dir + "/sample_imgs"
-#     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
-#                              list_of_names=list_of_names, save_dir=save_dir)
-#
 
 def cluster_acc(Y_pred, Y):
   from sklearn.utils.linear_assignment_ import linear_assignment
@@ -321,7 +280,11 @@ def pretrain(epochs):
     #     # sample_once(it_offset + max_it)
     #     print("Save sample images")
     #     training(max_it, it_offset + max_it)
-
+with tf.variable_scope('gmm', reuse=True):
+    theta_p = tf.get_variable('theta_p')
+    u_p = tf.get_variable('u_p')
+    lambda_p = tf.get_variable('lambda_p')
+var_grad = tf.gradients(KL_loss, gmm_var)
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
     # total_it = it_offset + max_it
@@ -336,14 +299,18 @@ def training(max_it, it_offset):
         #     lr_nn = max(lr_nn * decay_factor, 0.0002)
         #     print('lr: ', lr_nn)
 
+
+        var_grad_val = sess.run(var_grad, feed_dict={real: real_ipt})
         _ = sess.run([kl_step], feed_dict={real: real_ipt})
+        # a,b,c = sess.run([theta_p, u_p, lambda_p])
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
+            # soft = sess.run(q, feed_dict={real: X})
+            predict_y = sess.run(tf.argmax(compute_soft_assign(z_mean),axis=1), feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
             plt.clf()
@@ -379,8 +346,11 @@ try:
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
     ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
-    load_kmean = kmean_init()
-    sess.run(load_kmean)
+    # load_kmean = kmean_init()
+    # sess.run(load_kmean)
+
+    load_gmm = gmm_init()
+    sess.run(load_gmm)
     training(max_it,0)
     # total_it = sess.run(global_step)
     # print("Total iterations: "+str(total_it))

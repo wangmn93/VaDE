@@ -238,9 +238,10 @@ sess.run(tf.global_variables_initializer())
 # load_weight = load_pretrain_weight()
 # sess.run(load_weight) #load pretrain weights
 ae_saver = tf.train.Saver(var_list=en_var+de_var)
-ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+# ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
+ae_saver.restore(sess, 'results/ae-20180412-153851/checkpoint/model.ckpt') #ep200
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.

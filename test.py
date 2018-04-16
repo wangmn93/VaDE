@@ -168,4 +168,52 @@ if 0:
         plt.imshow(img, cmap='gray')
         plt.show()
 
+if 1:
+    from keras import backend as K
+    n_centroid = 2
+    z_dim = 5
+    z = tf.placeholder(tf.float32, shape=[None, z_dim])
+    theta_p = tf.get_variable('theta_p', shape=(n_centroid))
+    u_p = tf.get_variable('u_p', shape=(n_centroid, z_dim))
+    lambda_p = tf.get_variable('lambda_p', shape=(n_centroid, z_dim))
+    # num_data = 100
+    def gamma_output(z, u_p, theta_p, lambda_p):
+        Z = tf.tile(tf.expand_dims(z, [1]), [1, n_centroid, 1])
+        u_p_tensor = tf.expand_dims(u_p, [0])
+        lambda_p_tensor = tf.expand_dims(lambda_p, [0])
+        theta_p_tensor = tf.expand_dims(theta_p, [0])
+        diff = -0.5*tf.square(Z - u_p_tensor)/lambda_p_tensor
+        temp = -0.5*tf.log(2 * math.pi * lambda_p_tensor)
+        # Z = tf.transpose(K.repeat(z, n_centroid), [0, 2, 1])
+        log_gamma = tf.log(theta_p_tensor) + tf.reduce_sum(temp+diff,axis=2)
+        gamma = tf.exp(log_gamma)
+        gamma = gamma/tf.reduce_sum(gamma, axis=1, keep_dims=True)
+        print 'z',Z.shape
+        print 'u_p_tensor',u_p_tensor.shape
+        print 'lambda_p_tensor', lambda_p_tensor.shape
+        print 'theta_p_tensor', theta_p_tensor.shape
+        print 'diff',diff.shape
+        print 'temp', temp.shape
+        print 'gamma', gamma.shape
+
+
+        # u_tensor3 = tf.tile(tf.expand_dims(u_p, [0]), [num_data, 1, 1])
+        # # u_tensor3 = T.repeat(tf.expand_dims(u_p,[0]), batch_size, axis=0)
+        # # lambda_tensor3 = T.repeat(tf.expand_dims(lambda_p,[0]), batch_size, axis=0)
+        # lambda_tensor3 = tf.tile(tf.expand_dims(lambda_p, [0]), [num_data, 1, 1])
+        # temp_theta_p = tf.expand_dims(theta_p, [0])
+        # temp_theta_p = tf.expand_dims(temp_theta_p, [0])
+        # # theta_tensor3 = temp_theta_p * T.ones((batch_size, z_dim, n_centroid))
+        # theta_tensor3 = tf.tile(temp_theta_p, [num_data, z_dim, 1])
+        #
+        # # @TODO
+        # # PROBLEM HERE ? add theta z_dim times for each cluster?
+        # p_c_z = K.exp(K.sum((K.log(theta_tensor3) - 0.5 * K.log(2 * math.pi * lambda_tensor3) - \
+        #                      K.square(Z - u_tensor3) / (2 * lambda_tensor3)), axis=1)) + 1e-10
+        #
+        # gamma = p_c_z / K.sum(p_c_z, axis=-1, keepdims=True)
+        # return gamma
+        return gamma
+
+    gamma_output(z, u_p, theta_p, lambda_p)
 

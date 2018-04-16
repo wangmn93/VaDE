@@ -53,7 +53,7 @@ test_data = [[], [], [], [], [], [], [], [], [], []]
 colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
 plt.ion() # enables interactive mode
 for i, j in zip(X, Y):
-    if len(test_data[j]) < 500:
+    if len(test_data[j]) < 100:
         test_data[j].append(i)
 test_data_list = test_data[0]
 for i in range(1,10):
@@ -186,6 +186,9 @@ loss = vae_loss(real_flatten, x_hat_flatten,z, z_mean, z_log_var, u_p, theta_p, 
 gammas = gamma_output(z,u_p, theta_p, lambda_p)
 predicts = tf.argmax(gammas, axis=1)
 
+avg_entropy = tf.reduce_mean(models.entropy(gammas))
+min_entropy = tf.reduce_min(models.entropy(gammas))
+max_entropy = tf.reduce_max(models.entropy(gammas))
 # trainable variables for each network
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
@@ -244,6 +247,12 @@ ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/mode
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
 # ae_saver.restore(sess, 'results/vae-fmnist-20180411-182245/checkpoint/model.ckpt')
+# ae_saver.restore(sess, "results/ae-20180411-193032/checkpoint/model.ckpt")#ae ep200 Adam 0.94
+# ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')#ae ep100
+# ae_saver.restore(sess, 'results/ae-20180412-190443/checkpoint/model.ckpt')#ep 300 SGD Momentum 0.37??
+# ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.39
+
+
 def gmm_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
@@ -330,10 +339,10 @@ def training(max_it, it_offset):
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
+            predict_y,avg_e, min_e, max_e = sess.run([predicts, avg_entropy, min_entropy, max_entropy], feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
-
+            print('avg',avg_e,'min',min_e,'max',max_e)
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
             X_embedded = TSNE(n_components=2).fit_transform(sample)

@@ -35,7 +35,7 @@ is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="VaDE"
+gan_type="dec"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
@@ -144,8 +144,9 @@ recon_loss = tf.reduce_mean(recon_loss)
 def compute_soft_assign(z):
     with tf.variable_scope('kmean', reuse=True):
         theta_p = tf.get_variable('u_p')
-    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / 1.))
-    q **= (1. + 1.0) / 2.0
+    alpha = 1.
+    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / alpha))
+    q **= (alpha + 1.0) / 2.0
     q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
     return q
 
@@ -226,6 +227,7 @@ sess.run(tf.global_variables_initializer())
 # ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
 # ae_saver.restore(sess, "results/vae-fmnist-20180407-081702-20ep/checkpoint/model.ckpt")
 # ae_saver.restore(sess,"results/vae-fmnist-20180409-205638/checkpoint/model.ckpt")
+last_y_pred = None
 def kmean_init():
     from sklearn.cluster import KMeans
 
@@ -234,6 +236,8 @@ def kmean_init():
 
     sample = sess.run(z_mean, feed_dict={real:X})
     kmeans = KMeans(n_clusters=n_centroid, n_init=20).fit(sample)
+    global last_y_pred
+    last_y_pred = kmeans.predict(sample)
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
     # g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
@@ -321,7 +325,7 @@ def pretrain(epochs):
     #     # sample_once(it_offset + max_it)
     #     print("Save sample images")
     #     training(max_it, it_offset + max_it)
-
+var_grad = tf.gradients(KL_loss, kmean_var)[0]
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
     # total_it = it_offset + max_it
@@ -335,7 +339,7 @@ def training(max_it, it_offset):
         # if it % (decay_n*batch_epoch) == 0 and it != 0:
         #     lr_nn = max(lr_nn * decay_factor, 0.0002)
         #     print('lr: ', lr_nn)
-
+        # var_grad_val = sess.run(var_grad, feed_dict={real: real_ipt})
         _ = sess.run([kl_step], feed_dict={real: real_ipt})
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
@@ -346,6 +350,11 @@ def training(max_it, it_offset):
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+            if it>0:
+                global last_y_pred
+                delta_label = np.sum(predict_y != last_y_pred).astype(np.float32) / predict_y.shape[0]
+                print('delta label: ',delta_label)
+                last_y_pred = np.copy(predict_y)
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
             X_embedded = TSNE(n_components=2).fit_transform(sample)
@@ -378,7 +387,16 @@ try:
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
-    ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
+    # ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
+    # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')#ep200 0.96
+    # ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')#ep100 0.824
+    # ae_saver.restore(sess, 'results/ae-20180412-153851/checkpoint/model.ckpt') #ep200
+    # ae_saver.restore(sess, 'results/ae-20180412-160207/checkpoint/model.ckpt') #
+    # ae_saver.restore(sess, 'results/ae-20180412-173826/checkpoint/model.ckpt') #ep300 0.81
+    # ae_saver.restore(sess, 'results/ae-20180412-175908/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
+    # ae_saver.restore(sess, 'results/ae-20180412-190443/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
+    # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
+    ae_saver.restore(sess, 'results/ae-20180415-154410/checkpoint/model.ckpt') #ep150 SGD Momentum 0.953
     load_kmean = kmean_init()
     sess.run(load_kmean)
     training(max_it,0)

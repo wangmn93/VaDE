@@ -37,7 +37,7 @@ for i, j in zip(X, Y):
 test_data_list = test_data[0]
 for i in range(1,10):
     test_data_list = np.concatenate((test_data_list, test_data[i]))
-gan_type="ae"
+gan_type="ae-cat"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -48,6 +48,7 @@ data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
 """ graphs """
 encoder = partial(models.encoder, z_dim=z_dim)
 decoder = models.decoder
+cluster_layer = partial(models.cluster_layer, out_c = 10)
 optimizer = tf.train.MomentumOptimizer
 
 # inputs
@@ -58,6 +59,27 @@ z_mean, _ = encoder(real, reuse=False)
 
 #decoder
 x_hat = decoder(z_mean, reuse=False)
+
+soft = cluster_layer(z_mean, reuse = False)
+predicts = tf.argmax(soft,axis=1)
+#marginal entropy
+def mar_entropy(y):
+    # y1 = F.sum(y, axis=0) / batchsize
+    # y2 = F.sum(-y1 * F.log(y1))
+    # return y2
+    y1 = tf.reduce_mean(y,axis=0)
+    y2=tf.reduce_sum(-y1*tf.log(y1))
+    return y2
+
+#conditional entropy
+def cond_entropy(y):
+    # y1 = -y * F.log(y)
+    # y2 = F.sum(y1) / batchsize
+    # return y2
+    y1=-y*tf.log(y)
+    y2 = tf.reduce_sum(y1)/batch_size
+    return y2
+
 
 real_flatten = tf.reshape(real, [-1, 784])
 x_hat_flatten = tf.reshape(x_hat, [-1, 784])
@@ -75,7 +97,10 @@ recon_loss = tf.reduce_mean(recon_loss)
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
-
+cluster_var = [var for var in T_vars if var.name.startswith('cluster')]
+#===============
+rim_loss = -1 * (mar_entropy(soft) - cond_entropy(soft)) + 0.1 * tf.add_n([ tf.nn.l2_loss(v) for v in en_var+cluster_var ])
+recon_loss += 0.5 * rim_loss
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=lr, momentum=0.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
@@ -137,6 +162,17 @@ def training(max_it, it_offset):
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it%(5*batch_epoch) == 0 and it != 0:
+            predict_y = sess.run(predicts, feed_dict={real: X})
+            acc = my_utils.cluster_acc(predict_y, Y)
+            print('C-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+
+            from sklearn.cluster import KMeans
+            sample = sess.run(z_mean, feed_dict={real: X})
+            predict_y = KMeans(n_clusters=10, n_init=20).fit_predict(sample)
+            acc = my_utils.cluster_acc(predict_y, Y)
+            print('KMEAN-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+
+            #plot latent space
             i = 0
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})

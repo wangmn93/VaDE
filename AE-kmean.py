@@ -119,6 +119,15 @@ max_it = epoch * batch_epoch
 #     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict={},
 #                              list_of_names=list_of_names, save_dir=save_dir)
 
+def cluster_acc(Y_pred, Y):
+  from sklearn.utils.linear_assignment_ import linear_assignment
+  assert Y_pred.size == Y.size
+  D = max(Y_pred.max(), Y.max())+1
+  w = np.zeros((D,D), dtype=np.int64)
+  for i in range(Y_pred.size):
+    w[Y_pred[i], Y[i]] += 1
+  ind = linear_assignment(w.max() - w)
+  return sum([w[i,j] for i,j in ind])*1.0/Y_pred.size, w
 
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
@@ -137,6 +146,16 @@ def training(max_it, it_offset):
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it%(5*batch_epoch) == 0 and it != 0:
+            from sklearn.cluster import KMeans
+
+            # imgs = full_data_pool.batch('img')
+            # imgs = (imgs + 1) / 2.
+
+            sample = sess.run(z_mean, feed_dict={real: X})
+            predict_y = KMeans(n_clusters=10, n_init=20).fit_predict(sample)
+            # predict_y = sess.run(predicts, feed_dict={real: X})
+            acc = cluster_acc(predict_y, Y)
+            print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
             i = 0
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})

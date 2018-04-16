@@ -36,7 +36,7 @@ is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="VaDE"
+gan_type="VaDE-mad"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
@@ -217,7 +217,7 @@ learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 vade_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(loss, var_list=en_var+de_var+gmm_var, global_step=global_step)
 dis_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(d_loss, var_list=dis_var)
-g_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(g_loss, var_list=gmm_var)
+g_step = optimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(g_loss, var_list=de_var+gmm_var)
 """ train """
 ''' init '''
 # session
@@ -327,7 +327,7 @@ def cluster_acc(Y_pred, Y):
   ind = linear_assignment(w.max() - w)
   return sum([w[i,j] for i,j in ind])*1.0/Y_pred.size, w
 
-
+start_push = 0
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
     # total_it = it_offset + max_it
@@ -342,15 +342,22 @@ def training(max_it, it_offset):
             lr_nn = max(lr_nn * decay_factor, 0.0002)
             print('lr: ', lr_nn)
         _ = sess.run([vade_step], feed_dict={real: real_ipt, learning_rate: lr_nn})
-        _ = sess.run([dis_step], feed_dict={learning_rate: lr_nn})
-        # if it %100:
-        _ = sess.run([g_step], feed_dict={learning_rate:lr_nn})
+        global start_push
+        if start_push:
+            _ = sess.run([dis_step], feed_dict={learning_rate: lr_nn})
+            # if it %100:
+            _ = sess.run([g_step], feed_dict={learning_rate:lr_nn})
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
+            if it%(batch_epoch*100) == 0:
+                var = raw_input("start push?")
+                if var.lower() == 'y':
+                    global start_push
+                    start_push = 1
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])

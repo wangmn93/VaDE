@@ -13,6 +13,7 @@ lrelu = partial(ops.leak_relu, leak=0.2)
 conv = partial(slim.conv2d, activation_fn=None)
 dconv = partial(slim.conv2d_transpose, activation_fn=None)
 batch_norm = partial(slim.batch_norm, decay=0.9, scale=True, epsilon=1e-5, updates_collections=None)
+lrelu_2 = partial(ops.leak_relu, leak=0.1)
 
 def encoder(x, reuse=True, name="encoder", z_dim=10):
     fc_relu = partial(fc, activation_fn=relu)
@@ -139,4 +140,90 @@ def generator_m(z, heads=10, dim=64, reuse=True, training=True, name="generator"
 
         return img_sets
 
+def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
+    with tf.variable_scope(name, reuse=reuse):
+        # Convolutional Layer #1
+        conv1 = tf.layers.conv2d(
+            inputs=x,
+            filters=32,
+            kernel_size=[5, 5],
+            padding="same",
+            activation=tf.nn.relu)
 
+        # Pooling Layer #1
+        pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+
+        # Convolutional Layer #2 and Pooling Layer #2
+        conv2 = tf.layers.conv2d(
+            inputs=pool1,
+            filters=64,
+            kernel_size=[5, 5],
+            padding="same",
+            activation=tf.nn.relu)
+        pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+
+        # Dense Layer
+        pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+        dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+        dropout = tf.layers.dropout(
+            inputs=dense, rate=1-keep_prob)
+
+        # Logits Layer
+        logits = tf.layers.dense(inputs=dropout, units=out_dim)
+        # y = tf.nn.softmax(logits)
+        return logits
+
+def generator(z, dim=64, reuse=True, training=True, name="generator"):
+    bn = partial(batch_norm, is_training=training)
+    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 1024)
+        y = fc_bn_relu(y, 7 * 7 * dim * 2)
+        y = tf.reshape(y, [-1, 7, 7, dim * 2])
+        y = dconv_bn_relu(y, dim * 2, 5, 2)
+        img = tf.sigmoid(dconv(y, 1, 5, 2))
+        return img
+
+def cat_generator(z,reuse=True, name = "generator", training = True):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu_2, biases_initializer=None)
+    fc_bn_lrelu_2 = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_lrelu(z, 500)
+        y = fc_bn_lrelu(y, 500)
+        y = fc_bn_lrelu_2(y, 1000)
+
+        y = tf.sigmoid(fc(y, 784))
+        y = tf.reshape(y, [-1, 28, 28, 1])
+            # out_put_sets.append(y_1)
+        return y
+
+def cat_discriminator(z, out_dim=10, reuse=True, name = "discriminator", training = True, stddev=0.3):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu_2, biases_initializer=None)
+    # fc_bn_lrelu_2 = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        y = z + tf.random_normal(shape=tf.shape(z),mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 1000)
+        y = y + tf.random_normal(shape=tf.shape(y),mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 500)
+        y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        logits = fc(y, out_dim)
+        # y_out = tf.nn.softmax(logits)
+        return logits
+
+def cluster_layer(z, out_c=10,reuse=True, name = "cluster"):
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc(z, out_c)
+        return tf.nn.softmax(y)
+
+def entropy(q):
+    return tf.reduce_sum(-q*tf.log(q), axis=1)

@@ -15,7 +15,7 @@ from functools import partial
 
 """ param """
 epoch = 300
-batch_size = 256
+batch_size = 64
 lr = 1e-3
 z_dim = 10
 n_critic = 1 #
@@ -37,7 +37,7 @@ for i, j in zip(X, Y):
 test_data_list = test_data[0]
 for i in range(1,10):
     test_data_list = np.concatenate((test_data_list, test_data[i]))
-gan_type="ae"
+gan_type="ae-dc"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -46,8 +46,8 @@ data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
 # data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 
 """ graphs """
-encoder = partial(models.encoder, z_dim=z_dim)
-decoder = models.decoder
+encoder = partial(models.dc_encoder, z_dim=z_dim)
+decoder = models.dc_decoder
 optimizer = tf.train.MomentumOptimizer
 
 # inputs
@@ -56,6 +56,8 @@ real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 # encoder
 z_mean, _ = encoder(real, reuse=False)
 
+#
+z_mean_embed, _ = encoder(real)
 #decoder
 x_hat = decoder(z_mean, reuse=False)
 
@@ -78,7 +80,7 @@ de_var = [var for var in T_vars if var.name.startswith('decoder')]
 
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
-ae_step = optimizer(learning_rate=lr, momentum=0.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
+ae_step = optimizer(learning_rate=lr,momentum=.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
 
 
 """ train """
@@ -119,6 +121,15 @@ max_it = epoch * batch_epoch
 #     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict={},
 #                              list_of_names=list_of_names, save_dir=save_dir)
 
+def cluster_acc(Y_pred, Y):
+  from sklearn.utils.linear_assignment_ import linear_assignment
+  assert Y_pred.size == Y.size
+  D = max(Y_pred.max(), Y.max())+1
+  w = np.zeros((D,D), dtype=np.int64)
+  for i in range(Y_pred.size):
+    w[Y_pred[i], Y[i]] += 1
+  ind = linear_assignment(w.max() - w)
+  return sum([w[i,j] for i,j in ind])*1.0/Y_pred.size, w
 
 def training(max_it, it_offset):
     print("Max iteration: " + str(max_it))
@@ -137,6 +148,16 @@ def training(max_it, it_offset):
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it%(5*batch_epoch) == 0 and it != 0:
+            from sklearn.cluster import KMeans
+
+            # imgs = full_data_pool.batch('img')
+            # imgs = (imgs + 1) / 2.
+
+            sample = sess.run(z_mean_embed, feed_dict={real: X})
+            predict_y = KMeans(n_clusters=10, n_init=20).fit_predict(sample)
+            # predict_y = sess.run(predicts, feed_dict={real: X})
+            acc = cluster_acc(predict_y, Y)
+            print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
             i = 0
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
