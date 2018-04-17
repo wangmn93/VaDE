@@ -42,21 +42,21 @@ def discriminator(img, dim=64, reuse=True, training=True):
         return logit, slim.flatten(y) #return logit and feature layer
 
 
+# def decoder(z, dim=64, channels=3, reuse=True, training=True):
+#     bn = partial(batch_norm, is_training=training)
+#     dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+#
+#     with tf.variable_scope('decoder', reuse=reuse):
+#         y = fc(z, 2 * 2 * dim * 8)
+#         y = tf.reshape(y, [-1, 2, 2, dim * 8])
+#         y = relu(bn(y))
+#         y = dconv_bn_relu(y, dim * 4, 5, 2)
+#         y = dconv_bn_relu(y, dim * 2, 5, 2)
+#         y = dconv_bn_relu(y, dim * 1, 5, 2)
+#         img = tf.tanh(dconv(y, channels, 5, 2))
+#         return img
+
 def decoder(z, dim=64, channels=3, reuse=True, training=True):
-    bn = partial(batch_norm, is_training=training)
-    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
-
-    with tf.variable_scope('decoder', reuse=reuse):
-        y = fc(z, 2 * 2 * dim * 8)
-        y = tf.reshape(y, [-1, 2, 2, dim * 8])
-        y = relu(bn(y))
-        y = dconv_bn_relu(y, dim * 4, 5, 2)
-        y = dconv_bn_relu(y, dim * 2, 5, 2)
-        y = dconv_bn_relu(y, dim * 1, 5, 2)
-        img = tf.tanh(dconv(y, channels, 5, 2))
-        return img
-
-def decoder2(z, dim=64, channels=3, reuse=True, training=True):
     bn = partial(batch_norm, is_training=training)
     dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
 

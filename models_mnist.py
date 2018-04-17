@@ -227,3 +227,24 @@ def cluster_layer(z, out_c=10,reuse=True, name = "cluster"):
 
 def entropy(q):
     return tf.reduce_sum(-q*tf.log(q), axis=1)
+
+def allconvnet_mnist(x, out_dim=10,name="classifier", training=True, reuse=True):
+    w_init = tf.variance_scaling_initializer(scale=2., mode='fan_in')
+    bn = partial(batch_norm, is_training=training)
+    conv_bn_relu = partial(conv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None, weights_initializer=w_init)
+    with tf.variable_scope(name, reuse=reuse):
+        # Convolutional Layer #1
+        y = conv_bn_relu(x, 64, 3, 1)
+        y = conv_bn_relu(y, 64, 3, 1)
+        y = conv_bn_relu(y, 64, 3, 2)
+        y = conv_bn_relu(y, 128, 3, 1)
+        y = conv_bn_relu(y, 128, 3, 1)
+        y = conv_bn_relu(y, 128, 3, 2)
+        y = conv_bn_relu(y, out_dim, 1, 1)
+        y = tf.reduce_mean(y, [1,2])
+        y = bn(y)
+        #restraint layer
+        y_max = tf.reduce_max(y, axis=1, keep_dims=True)
+        y = tf.exp(y - y_max)
+        y = y/tf.norm(y, ord=2, axis=1, keep_dims=True)
+        return y

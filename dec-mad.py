@@ -137,11 +137,11 @@ print('soft dist: ',q.shape)
 t = target_distribution2(q)
 print('target dist: ',t.shape)
 KL_loss = KL(t, q)
-beta = 0.01
-KL_recon_loss = beta*KL_loss + recon_loss
+# beta = 0.01
+# KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-g_loss = 0.5*g_loss
+g_loss = 0.5*g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
@@ -432,6 +432,7 @@ try:
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
     # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
+    # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
     ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')  # ep100 0.824
     load_kmean = kmean_init()
     sess.run(load_kmean)

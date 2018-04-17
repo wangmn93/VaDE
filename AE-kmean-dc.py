@@ -44,7 +44,6 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 ''' data '''
 data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
 # data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-
 """ graphs """
 encoder = partial(models.dc_encoder, z_dim=z_dim)
 decoder = models.dc_decoder
