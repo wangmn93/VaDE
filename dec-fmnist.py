@@ -35,7 +35,7 @@ is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="dec"
+gan_type="dec-fmnist"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
@@ -181,7 +181,7 @@ kmean_var = [var for var in T_vars if var.name.startswith('kmean')]
 learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=learning_rate).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
+kl_step = tf.train.MomentumOptimizer(learning_rate=0.001, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
 
 """ train """
 ''' init '''
@@ -350,6 +350,14 @@ def training(max_it, it_offset):
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+            dist = [0]*10
+            t_dist = [0]*10
+            for py,y_ in zip(predict_y,Y):
+                dist[py] += 1
+                t_dist[y_] += 1
+            print('true dist: ', np.array(t_dist) / float(num_data))
+            print('pred dist: ',np.array(dist)/float(num_data))
+
             if it>0:
                 global last_y_pred
                 delta_label = np.sum(predict_y != last_y_pred).astype(np.float32) / predict_y.shape[0]
@@ -363,6 +371,9 @@ def training(max_it, it_offset):
                             X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
                             color=colors[i],
                             label=str(i), s=2)
+                pred_one_class = sess.run(predicts, feed_dict={real: test_data_list[i * numPerClass:(i + 1) * numPerClass]})
+                acc = cluster_acc(pred_one_class, np.array([1 for _ in range(numPerClass)]))
+                print(i,'acc-per-class',acc[0])
                 # for test_d in test_data:
                 #     sample = sess.run(z_mean, feed_dict={real: test_d})
                 #     # X_embedded = sample
@@ -370,6 +381,7 @@ def training(max_it, it_offset):
                 #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
                 #     i += 1
                 plt.draw()
+            print('================')
             # plt.legend(loc='best')
             plt.show()
 #
@@ -387,7 +399,9 @@ try:
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
-    ae_saver.restore(sess,'results/ae-20180417-181634/checkpoint/model.ckpt') #SGD Momentum ep 95
+    # ae_saver.restore(sess,'results/ae-20180417-181634/checkpoint/model.ckpt') #SGD Momentum ep 95
+    # ae_saver.restore(sess,'results/ae-20180417-185019/checkpoint/model.ckpt') #SGD Mom ep300
+    ae_saver.restore(sess,'results/ae-20180419-185000/checkpoint/model.ckpt') #ep155
     load_kmean = kmean_init()
     sess.run(load_kmean)
     training(max_it,0)

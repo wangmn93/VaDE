@@ -39,10 +39,10 @@ gan_type="dec-mad"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-# X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-X, Y = my_utils.load_data('mnist')
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 plt.ion() # enables interactive mode
@@ -55,8 +55,7 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-num_heads = 10
-generator = partial(models.generator_m, heads=num_heads)
+generator = partial(models.generator_m, heads=10)
 discriminator = models.ss_discriminator
 sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
@@ -106,7 +105,7 @@ f_logit = discriminator(fake)
 
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
-d_loss = d_loss_real + (1./num_heads)*d_loss_fake
+d_loss = d_loss_real + 0.1*d_loss_fake
 # g_loss = 0
 g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
 
@@ -142,7 +141,7 @@ KL_loss = KL(t, q)
 # KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-g_loss = 0.001*g_loss #weight down real loss
+g_loss = 0.5*g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
@@ -170,7 +169,7 @@ dis_var = [var for var in T_vars if var.name.startswith('discriminator')]
 learning_rate = tf.placeholder(tf.float32, shape=[])
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=learning_rate).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
+kl_step = tf.train.MomentumOptimizer(learning_rate=0.0002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
 
 d_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(d_loss, var_list=dis_var)
 g_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(g_loss, var_list=g_var)
@@ -432,9 +431,7 @@ try:
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
-    # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
-    # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
-    ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')  # ep100 0.824
+    ae_saver.restore(sess, 'results/ae-20180417-185019/checkpoint/model.ckpt')  # SGD MOm ep300
     load_kmean = kmean_init()
     sess.run(load_kmean)
     training(10*batch_epoch,0)

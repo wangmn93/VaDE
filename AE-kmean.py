@@ -68,8 +68,10 @@ recon_loss = -tf.reduce_sum(
             axis=1
         )
 
-# recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
+
 recon_loss = tf.reduce_mean(recon_loss)
+
+# recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 
 # trainable variables for each network
 T_vars = tf.trainable_variables()
@@ -79,7 +81,7 @@ de_var = [var for var in T_vars if var.name.startswith('decoder')]
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
 ae_step = optimizer(learning_rate=lr, momentum=0.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-
+ae_step = tf.train.AdamOptimizer(learning_rate=lr).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
 
 """ train """
 ''' init '''

@@ -37,7 +37,7 @@ n_critic = 1 #
 n_generator = 1
 gan_type="dec-mad"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
+tf.set_random_seed(1234)
 ''' data '''
 data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
 # data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
@@ -55,7 +55,7 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-num_heads = 10
+num_heads = 1
 generator = partial(models.generator_m, heads=num_heads)
 discriminator = models.ss_discriminator
 sampleing = models.sampleing
@@ -63,12 +63,6 @@ optimizer = tf.train.AdamOptimizer
 
 with tf.variable_scope('kmean', reuse=False):
     tf.get_variable("u_p", [n_centroid, z_dim], dtype=tf.float32)
-
-#gmm params
-# with tf.variable_scope('gmm', reuse=False):
-#     tf.get_variable("theta_p", [n_centroid], dtype=tf.float32)
-#     tf.get_variable("u_p", [z_dim, n_centroid], dtype=tf.float32)
-#     tf.get_variable("lambda_p", [z_dim, n_centroid], dtype=tf.float32)
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
@@ -142,24 +136,31 @@ KL_loss = KL(t, q)
 # KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-g_loss = 0.001*g_loss #weight down real loss
+init_weight = 0.5
+weight = tf.placeholder(tf.float32, shape=[])
+g_loss = weight*g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
     f_l = compute_soft_assign(f_m)
     g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
-# onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=10)
+#=======================
+#feature extractor
+# extracted_feature_real = encoder(real,name='extractor', reuse=False)
+# extracted_feature_fake = encoder(fake,name='extractor')
+# bandwidths = [2.0, 5.0, 10.0, 20.0, 40.0, 80.0]
+# from mmd import mix_rbf_mmd2
+# kernel_loss = mix_rbf_mmd2(extracted_feature_fake, extracted_feature_real, sigmas=bandwidths)
+# kernel_loss = tf.sqrt(kernel_loss)
 
-# f_mean, _ =  encoder(fake)
-# mimic_logit = compute_soft_assign(f_mean)
-# mimic_loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=mimic_logit, onehot_labels=onehot_labels))
-#  + mimic_loss
+
 
 # trainable variables for each network
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
+# ext_var = [var for var in T_vars if var.name.startswith('extractor')]
 kmean_var = [var for var in T_vars if var.name.startswith('kmean')]
 
 g_var = [var for var in T_vars if var.name.startswith('generator')]
@@ -188,6 +189,7 @@ saver = tf.train.Saver(max_to_keep=5)
 # Send summary statistics to TensorBoard
 tf.summary.scalar('d_loss', d_loss)
 tf.summary.scalar('g_loss', g_loss)
+# tf.summary.scalar('mmd', kernel_loss)
 tf.summary.image('Real', real, 12)
 tf.summary.image('Recon', x_hat, 12)
 
@@ -231,7 +233,9 @@ def kmean_init():
     # imgs = (imgs + 1) / 2.
 
     sample = sess.run(z_mean, feed_dict={real:X})
-    kmeans = KMeans(n_clusters=n_centroid, n_init=20).fit(sample)
+    #random state 1 ->num 5
+    #random state 0 ->num 4,9
+    kmeans = KMeans(n_clusters=n_centroid, n_init=20, random_state=0).fit(sample)
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
     # g = mixture.GMM(n_components=n_centroid, covariance_type='diag')
@@ -333,6 +337,7 @@ def training(max_it, it_offset):
         # if it % (decay_n*batch_epoch) == 0 and it != 0:
         #     lr_nn = max(lr_nn * decay_factor, 0.0002)
         #     print('lr: ', lr_nn)
+
         _ = sess.run([kl_step], feed_dict={real: real_ipt})
         # if it%10 ==0:
         # _ = sess.run([recon_step], feed_dict={real: real_ipt})
@@ -341,7 +346,7 @@ def training(max_it, it_offset):
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
-            summary = sess.run(merged, feed_dict={real: real_ipt})
+            summary = sess.run(merged, feed_dict={real: real_ipt, weight: init_weight})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
             predict_y = sess.run(predicts, feed_dict={real: X})
@@ -422,9 +427,13 @@ def gan_train(max_it, it_offset):
         real_ipt, y = data_pool.batch(['img', 'label'])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt})
+        if it%700 ==0 and it != 0:
+            global init_weight
+            init_weight = max(0.0000000, init_weight*0.2)
+            print('weight: ',init_weight)
+        _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt, weight:init_weight})
         if it % 10 == 0:
-            summary = sess.run(merged, feed_dict={real: real_ipt})
+            summary = sess.run(merged, feed_dict={real: real_ipt, weight:init_weight})
             writer.add_summary(summary, it)
 total_it = 0
 try:
@@ -432,12 +441,18 @@ try:
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
+    # ext_saver = tf.train.Saver(var_list=ext_var)
     # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
     # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
     ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')  # ep100 0.824
+    # ext_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')
+    # ae_saver.restore(sess,'results/dec-20180418-110857/checkpoint/model.ckpt') #dec trained 0.828
+    # ae_saver.restore(sess,'results/dec-20180418-112752/checkpoint/model.ckpt') #dec trained
+    # ae_saver.restore(sess, 'results/dec-mad-20180418-114438-0.001/checkpoint/dec-model.ckpt')
     load_kmean = kmean_init()
     sess.run(load_kmean)
     training(10*batch_epoch,0)
+    # print("DEC Model saved in path: %s" %ae_saver.save(sess, dir + "/checkpoint/dec-model.ckpt") )
     gan_train(max_it, 10*batch_epoch)
     # recon_training(max_it,0)
     # total_it = sess.run(global_step)

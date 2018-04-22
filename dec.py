@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 """ param """
-epoch = 100
+epoch = 10
 batch_size = 256
 # lr = 1e-3
 lr_nn = 0.002
@@ -389,14 +389,14 @@ try:
     ae_saver = tf.train.Saver(var_list=en_var+de_var)
     # ae_saver.restore(sess, "results/vae-20180406-172649-current-best/checkpoint/model.ckpt")
     # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')#ep200 0.96
-    # ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')#ep100 0.824
+    ae_saver.restore(sess, 'results/ae-20180412-134727/checkpoint/model.ckpt')#ep100 0.824
     # ae_saver.restore(sess, 'results/ae-20180412-153851/checkpoint/model.ckpt') #ep200
     # ae_saver.restore(sess, 'results/ae-20180412-160207/checkpoint/model.ckpt') #
     # ae_saver.restore(sess, 'results/ae-20180412-173826/checkpoint/model.ckpt') #ep300 0.81
     # ae_saver.restore(sess, 'results/ae-20180412-175908/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
     # ae_saver.restore(sess, 'results/ae-20180412-190443/checkpoint/model.ckpt') #ep300 SGD Momentum 0.94
     # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
-    ae_saver.restore(sess, 'results/ae-20180415-154410/checkpoint/model.ckpt') #ep150 SGD Momentum 0.953
+    # ae_saver.restore(sess, 'results/ae-20180415-154410/checkpoint/model.ckpt') #ep150 SGD Momentum 0.953
     load_kmean = kmean_init()
     sess.run(load_kmean)
     training(max_it,0)

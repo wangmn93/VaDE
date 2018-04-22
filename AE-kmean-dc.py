@@ -16,12 +16,12 @@ from functools import partial
 """ param """
 epoch = 300
 batch_size = 64
-lr = 1e-3
-z_dim = 10
+lr = 2e-4
+z_dim = 20
 n_critic = 1 #
 n_generator = 1
-
-X, Y = my_utils.load_data('mnist')
+X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 
@@ -42,12 +42,13 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 ''' data '''
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
-# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False)
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+
 """ graphs """
 encoder = partial(models.dc_encoder, z_dim=z_dim)
 decoder = models.dc_decoder
-optimizer = tf.train.MomentumOptimizer
+optimizer = tf.train.AdamOptimizer
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
@@ -79,7 +80,7 @@ de_var = [var for var in T_vars if var.name.startswith('decoder')]
 
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
-ae_step = optimizer(learning_rate=lr,momentum=.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
+ae_step = optimizer(learning_rate=lr, beta1=.5).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
 
 
 """ train """

@@ -24,7 +24,7 @@ def sigmoid_cross_entropy_without_sum(predict ,label):
     loss = -(label * tf.log(epsilon + predict) + (1 - label) * tf.log(epsilon + 1 - predict))
     return loss
 
-batch_size = 32
+batch_size = 1000
 learning_rate = 0.001
 epochs = 100
 data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
@@ -43,26 +43,6 @@ l_alpha = 0.455 + 0.1*alpha
 #===================
 feature_labels = models.allconvnet_mnist(real, name='encoder', reuse=False)
 
-# def cos_sim(l):
-#     sim_mat = tf.matmul(l, l, transpose_b=True)
-#     print('sim mat', sim_mat)
-#     norm_1 = tf.norm(l, ord=2, axis=1,keep_dims=True)
-#     norm_mat = tf.matmul(norm_1, norm_1, transpose_b=True)
-#     print('norm mat', norm_mat)
-#     sim_mat = sim_mat/norm_mat
-#     return sim_mat
-#
-# cos_mat = cos_sim(tf.exp(feature_labels))
-
-# def restrain(l):
-#     #restrain layer
-#     f_max = tf.reduce_max(l,axis=1, keep_dims=True)
-#     f1 = l-f_max
-#     f2 = tf.exp(f1)
-#     f3 = f2/tf.norm(f2, ord=2, axis=1,keep_dims=True)
-#     return f3
-#
-# feature_labels = restrain(feature_labels)
 f_predict = models.allconvnet_mnist(real, name='encoder',training=False)
 predicts = tf.argmax(f_predict, axis=1)
 
