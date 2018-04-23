@@ -230,9 +230,9 @@ def entropy(q):
     return tf.reduce_sum(-q*tf.log(q), axis=1)
 
 def allconvnet_mnist(x, out_dim=10,name="classifier", training=True, reuse=True):
-    w_init = tf.variance_scaling_initializer(scale=2., mode='fan_in')
+    # w_init = tf.variance_scaling_initializer(scale=2., mode='fan_in')
     bn = partial(batch_norm, is_training=training)
-    conv_bn_relu = partial(conv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None, weights_initializer=w_init)
+    conv_bn_relu = partial(conv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)#, weights_initializer=w_init)
     with tf.variable_scope(name, reuse=reuse):
         # Convolutional Layer #1
         y = conv_bn_relu(x, 64, 3, 1)

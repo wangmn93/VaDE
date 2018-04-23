@@ -17,7 +17,7 @@ from functools import partial
 epoch = 300
 batch_size = 256
 lr = 1e-3
-z_dim = 128
+z_dim = 10
 n_critic = 1 #
 n_generator = 1
 X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
@@ -37,7 +37,7 @@ for i, j in zip(X, Y):
 test_data_list = test_data[0]
 for i in range(1,10):
     test_data_list = np.concatenate((test_data_list, test_data[i]))
-gan_type="ae"
+gan_type="sparse-ae"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -56,6 +56,8 @@ real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 # encoder
 z_mean, _ = encoder(real, reuse=False)
 
+
+
 #decoder
 x_hat = decoder(z_mean, reuse=False)
 
@@ -73,15 +75,26 @@ recon_loss = tf.reduce_mean(recon_loss)
 
 # recon_loss = tf.losses.mean_squared_error(x_hat_flatten,real_flatten)
 
+
+
 # trainable variables for each network
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
 de_var = [var for var in T_vars if var.name.startswith('decoder')]
 
+def kl_divergence(rho, rho_hat):
+    return rho * tf.log(rho) - rho * tf.log(rho_hat) + (1 - rho) * tf.log(1 - rho) - (1 - rho) * tf.log(1 - rho_hat)
+avg_act = tf.reduce_mean(tf.nn.sigmoid(z_mean), axis=0)
+kl = kl_divergence(0.01, avg_act)
+cost= recon_loss  \
+              +0.0001*(tf.add_n([ tf.nn.l2_loss(v) for v in en_var+de_var ]))#   \
+              #+3*tf.reduce_sum(kl)
+
+
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
-ae_step = optimizer(learning_rate=lr, momentum=0.9).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
-ae_step = tf.train.AdamOptimizer(learning_rate=lr).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
+ae_step = optimizer(learning_rate=lr, momentum=0.9).minimize(cost, var_list=en_var+de_var, global_step=global_step)
+# ae_step = tf.train.AdamOptimizer(learning_rate=lr).minimize(recon_loss, var_list=en_var+de_var, global_step=global_step)
 
 """ train """
 ''' init '''
@@ -154,17 +167,14 @@ def training(max_it, it_offset):
             # imgs = (imgs + 1) / 2.
 
             sample = sess.run(z_mean, feed_dict={real: X})
-            kmean = KMeans(n_clusters=10, n_init=20).fit(sample)
-            centroids = kmean.cluster_centers_
-            predict_y = kmean.predict(sample)
+            predict_y = KMeans(n_clusters=10, n_init=20).fit_predict(sample)
             # predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
             i = 0
             plt.clf()
-            #===========plot============
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
-            X_embedded = TSNE(n_components=2).fit_transform(np.concatenate((sample,centroids)))
+            X_embedded = TSNE(n_components=2).fit_transform(sample)
             for i in range(10):
                 plt.scatter(X_embedded[i*100:(i+1)*100, 0], X_embedded[i*100:(i+1)*100, 1], color=colors[i], label=str(i), s=2)
             # for test_d in test_data:
@@ -175,9 +185,6 @@ def training(max_it, it_offset):
             #     i += 1
                 plt.draw()
             # plt.legend(loc='best')
-            plt.scatter(X_embedded[1000:, 0], X_embedded[1000:, 1], color='red', marker='^',
-                            s=40)
-            plt.draw()
             plt.show()
                 # GaussianMixture(n_components=n_classes,
                 #                 covariance_type=cov_type

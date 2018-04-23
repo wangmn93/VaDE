@@ -397,6 +397,13 @@ def recon_training(max_it, it_offset):
             predict_y = sess.run(predicts, feed_dict={real: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+            true_dist = [0]*10
+            dist = [0]*10
+            for i,j in zip(predict_y,Y):
+                true_dist[j] += 1
+                dist[i] += 1
+            print(np.array(true_dist)/float(num_data))
+            print(np.array(dist) / float(num_data))
             plt.clf()
             sample = sess.run(z_mean, feed_dict={real: test_data_list})
             X_embedded = TSNE(n_components=2).fit_transform(sample)
