@@ -208,3 +208,20 @@ def sample_and_save(sess, list_of_generators, list_of_names, feed_dict, save_dir
 #     save_dir = dir + "/sample_imgs"
 #     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
 #                              list_of_names=list_of_names, save_dir=save_dir)
+
+
+def smorms3(cost, params, lr=np.float32(0.001), eps=np.float32(1e-16)):
+    g_params = tf.gradients(cost, params)
+    updates = []
+    for param, g_param in zip(params, g_params):
+        m = tf.Variable(np.ones(param.get_shape(), dtype='float32'), name='m')
+        g = tf.Variable(np.zeros(param.get_shape(), dtype='float32'), name='g')
+        g2 = tf.Variable(np.zeros(param.get_shape(), dtype='float32'), name='g2')
+        r = 1./(m + 1.)
+        updates.append(g.assign((1. - r)*g + r*g_param))
+        updates.append(g2.assign((1. - r)*g2 + r*g_param**2))
+        with tf.control_dependencies(updates):
+            x = g**2/(g2 + eps)
+            updates.append(param.assign(param - tf.minimum(lr, x)/tf.sqrt(g2 + eps)*g_param))
+            updates.append(m.assign(1. + (1. - x)*m))
+    return updates

@@ -21,7 +21,7 @@ from sklearn.manifold import TSNE
 
 """ param """
 epoch = 100
-batch_size = 256
+batch_size = 100
 # lr = 1e-3
 lr_nn = 0.002
 # decay_n = 10

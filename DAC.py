@@ -24,11 +24,13 @@ def sigmoid_cross_entropy_without_sum(predict ,label):
     loss = -(label * tf.log(epsilon + predict) + (1 - label) * tf.log(epsilon + 1 - predict))
     return loss
 
-batch_size = 1000
+batch_size = 32
 learning_rate = 0.001
 epochs = 100
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-X, Y = my_utils.load_data('mnist')
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 real = tf.placeholder(tf.float32, [None, 28, 28, 1])
 # keep_prob = tf.placeholder(tf.float32)

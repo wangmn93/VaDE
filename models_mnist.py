@@ -249,3 +249,36 @@ def allconvnet_mnist(x, out_dim=10,name="classifier", training=True, reuse=True)
         y = tf.exp(y - y_max)
         y = y/tf.norm(y, ord=2, axis=1, keep_dims=True)
         return y
+
+def cnn_discriminator(z, out_dim=10, reuse=True, name = "discriminator" , training=True):
+    lrelu_1 = partial(ops.leak_relu, leak=0.1)
+    conv_lrelu = partial(conv, activation_fn=lrelu_1)
+    fc_lrelu = partial(fc, activation_fn=lrelu_1)
+    with tf.variable_scope(name, reuse=reuse):
+        y = conv_lrelu(z, 32, 5, 1)
+        y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
+        y = conv_lrelu(y, 64, 3, 1)
+        y = conv_lrelu(y, 64, 3, 1)
+        y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
+        y = conv_lrelu(y, 128, 3, 1)
+        y = conv_lrelu(y, 10, 1, 1)
+        y = fc_lrelu(y, 128)
+        y = fc(y,out_dim)
+        return y
+
+def cnn_generator(z, reuse = True, name = "generator", training=True):
+    lrelu_1 = partial(ops.leak_relu, leak=0.1)
+    dconv_lrelu = partial(dconv,  activation_fn=lrelu_1)
+    fc_lrelu = partial(fc, activation_fn=lrelu_1)
+    conv_lrelu = partial(conv, activation_fn=lrelu_1)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_lrelu(z, 7*7*96)
+        y = tf.reshape(y,shape=[-1,7,7,96])
+        y = dconv_lrelu(y, 1, 5, 2)
+        y = conv_lrelu(y, 64, 5, 1)
+        y = dconv_lrelu(y, 1, 5, 2)
+        y = conv_lrelu(y, 64, 5, 1)
+        y = conv_lrelu(y, 1, 5, 1)
+
+        # out_put_sets.append(y_1)
+        return y

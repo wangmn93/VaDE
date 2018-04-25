@@ -28,8 +28,10 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 ''' data '''
 # keep = range(10)
 # keep = [1,3,5]
-data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-X, Y = my_utils.load_data('mnist')
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
@@ -47,9 +49,9 @@ for i in range(1,10):
 
 """ graphs """
 # generator = partial(models.generator_m, heads=1)
-generator = models.cat_generator
+generator = models.generator
 # discriminator = partial(models.cnn_classifier_2,out_dim=len(keep))
-encoder = partial(models.cat_discriminator, out_dim = z_dim)
+encoder = partial(models.cnn_discriminator, out_dim = 10)
 # classifier = partial(models.cat_discriminator,out_dim=10)
 optimizer = tf.train.AdamOptimizer
 
@@ -77,6 +79,7 @@ def cond_entropy(y):
     return y2
 
 fake = generator(random_z, reuse=False)
+print('fake shape ',fake.shape)
 r_mean = encoder(real, reuse=False)
 f_mean = encoder(fake)
 # with tf.variable_scope('cluster_layer', reuse=False):
@@ -88,10 +91,12 @@ r_p = tf.nn.softmax(r_mean)
 f_p = tf.nn.softmax(f_mean)
 
 #discriminator loss
-d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
+with tf.variable_scope('d_loss'):
+    d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
 
 #generator loss
-g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
+with tf.variable_scope('g_loss'):
+    g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
 
 
 # trainable variables for each network
@@ -105,6 +110,15 @@ g_var = [var for var in T_vars if var.name.startswith('generator')]
 global_step = tf.Variable(0, name='global_step',trainable=False)
 d_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_loss, var_list=d_var, global_step=global_step)
 g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_var)
+
+# d_updates = my_utils.smorms3(d_loss, d_var)
+#
+# d_train = tf.group(*d_updates)
+#
+# g_updates = my_utils.smorms3(g_loss, g_var)
+#
+# g_train = tf.group(*g_updates)
+
 
 """ train """
 ''' init '''
@@ -166,7 +180,14 @@ def training(max_it, it_offset):
     for it in range(it_offset, it_offset + max_it):
         real_ipt, y = data_pool.batch(['img', 'label'])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt})
+        if it//batch_epoch >25:
+            print('stop G')
+            _ = sess.run([d_step], feed_dict={real: real_ipt})
+        else:
+            _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt})
+
+
+        # sess.run([d_train, g_train], feed_dict={real: real_ipt})
         # _ = sess.run([g_step], feed_dict={random_z: z_ipt})
 
         if it%10 == 0 :
@@ -181,8 +202,8 @@ def training(max_it, it_offset):
             writer.add_summary(summary, it)
         #
         if it%(batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[:1000]})
-            acc = cluster_acc(predict_y, Y[:1000])
+            predict_y = sess.run(predicts, feed_dict={real: X[:5000]})
+            acc = cluster_acc(predict_y, Y[:5000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
 
             plt.clf()
