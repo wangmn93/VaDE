@@ -141,6 +141,31 @@ def generator_m(z, heads=10, dim=64, reuse=True, training=True, name="generator"
 
         return img_sets
 
+def generator(z, dim=64, reuse=True, training=True, name="generator"):
+    bn = partial(batch_norm, is_training=training)
+    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 1024)
+        y = fc_bn_relu(y, 7 * 7 * dim * 2)
+        y = tf.reshape(y, [-1, 7, 7, dim * 2])
+        y = dconv_bn_relu(y, dim * 2, 5, 2)
+        y = tf.sigmoid(dconv(y, 1, 5, 2))
+        return y
+
+def discriminator(img, dim=64, reuse=True, training=True, name= 'discriminator'):
+    bn = partial(batch_norm, is_training=training)
+    conv_bn_lrelu = partial(conv, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+
+    with tf.variable_scope(name, reuse=reuse):
+        y = lrelu(conv(img, 1, 5, 2))
+        y = conv_bn_lrelu(y, dim, 5, 2)
+        y = fc_bn_lrelu(y, 1024)
+        logit = fc(y, 1)
+        return logit
+
 def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
     with tf.variable_scope(name, reuse=reuse):
         # Convolutional Layer #1
@@ -263,6 +288,26 @@ def cnn_discriminator(z, out_dim=10, reuse=True, name = "discriminator" , traini
         y = conv_lrelu(y, 128, 3, 1)
         y = conv_lrelu(y, 10, 1, 1)
         y = fc_lrelu(y, 128)
+        y = fc(y,out_dim)
+        return y
+
+def cnn_discriminator_cifar(z, out_dim=10, reuse=True, name = "discriminator" , training=True):
+    lrelu_1 = partial(ops.leak_relu, leak=0.1)
+    conv_lrelu = partial(conv, activation_fn=lrelu_1)
+    fc_lrelu = partial(fc, activation_fn=lrelu_1)
+    with tf.variable_scope(name, reuse=reuse):
+        y = conv_lrelu(z, 96, 3, 1)
+        y = conv_lrelu(y, 96, 3, 1)
+        y = conv_lrelu(y, 96, 3, 1)
+        y = tf.layers.max_pooling2d(inputs=y, pool_size=[2, 2], strides=2)
+        y = conv_lrelu(y, 192, 3, 1)
+        y = conv_lrelu(y, 192, 3, 1)
+        y = conv_lrelu(y, 192, 3, 1)
+        y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
+        y = conv_lrelu(y, 192, 3, 1)
+        y = conv_lrelu(y, 192, 1, 1)
+        y = conv_lrelu(y, 10, 1, 1)
+        y = tf.reduce_mean(y, [1, 2])
         y = fc(y,out_dim)
         return y
 

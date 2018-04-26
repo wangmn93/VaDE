@@ -91,12 +91,12 @@ r_p = tf.nn.softmax(r_mean)
 f_p = tf.nn.softmax(f_mean)
 
 #discriminator loss
-with tf.variable_scope('d_loss'):
-    d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
+# with tf.variable_scope('d_loss'):
+d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
 
 #generator loss
-with tf.variable_scope('g_loss'):
-    g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
+# with tf.variable_scope('g_loss'):
+g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
 
 
 # trainable variables for each network
@@ -180,9 +180,11 @@ def training(max_it, it_offset):
     for it in range(it_offset, it_offset + max_it):
         real_ipt, y = data_pool.batch(['img', 'label'])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        if it//batch_epoch >25:
-            print('stop G')
+        if it > batch_epoch*25:
+            # print('decrease G')
             _ = sess.run([d_step], feed_dict={real: real_ipt})
+            if it%3 == 0:
+                _ = sess.run([g_step], feed_dict={real: real_ipt})
         else:
             _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt})
 
@@ -202,8 +204,8 @@ def training(max_it, it_offset):
             writer.add_summary(summary, it)
         #
         if it%(batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[:5000]})
-            acc = cluster_acc(predict_y, Y[:5000])
+            predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
+            acc = cluster_acc(predict_y, Y[:10000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
 
             plt.clf()
