@@ -147,7 +147,10 @@ for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
     f_l = compute_soft_assign(f_m)
-    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
+    g_loss += tf.reduce_mean(objectives.categorical_crossentropy(onehot_labels,f_l))
+
+    # g_loss+= tf.reduce_mean(tf.reduce_sum(-tf.log(f_l*tf.cast(onehot_labels, tf.float32)),axis=1))
+    # g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
 # onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=10)
 

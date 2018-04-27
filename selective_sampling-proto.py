@@ -23,12 +23,6 @@ n_generator = 1
 gan_type="vanilla-gan"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-# np.random.seed(0)
-# tf.set_random_seed(1234)
-
-# restore = False
-# ckpt_dir =
-
 ''' data '''
 data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
@@ -74,7 +68,7 @@ g_var = [var for var in T_vars if var.name.startswith('g1')]
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
 d_step = optimizer(learning_rate=lr, beta1=0.5).minimize(d_loss, var_list=d_var, global_step=global_step)
-g_step = optimizer(learning_rate=lr).minimize(g_loss, var_list=g_var)
+g_step = optimizer(learning_rate=lr, beta1=0.5).minimize(g_loss, var_list=g_var)
 
 """ train """
 ''' init '''
@@ -87,9 +81,9 @@ saver = tf.train.Saver(max_to_keep=5)
 # Send summary statistics to TensorBoard
 
 tf.summary.scalar('G_loss', g_loss)
-tf.summary.scalar('Discriminator_loss', d_loss)
+tf.summary.scalar('D_loss', d_loss)
 images_form_g = generator(z, name="g1", training= False)
-tf.summary.image('G1_images', images_form_g, 12)
+tf.summary.image('G_images', images_form_g, 12)
 merged = tf.summary.merge_all()
 logdir = dir+"/tensorboard"
 writer = tf.summary.FileWriter(logdir, sess.graph)

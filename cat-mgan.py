@@ -50,6 +50,8 @@ for i in range(1,10):
 """ graphs """
 # generator = partial(models.generator_m, heads=1)
 generator = models.generator
+
+generator_m = partial(models.generator_m, heads=10)
 # discriminator = partial(models.cnn_classifier_2,out_dim=len(keep))
 encoder = partial(models.cnn_discriminator, out_dim = 10)
 # classifier = partial(models.cat_discriminator,out_dim=10)
@@ -78,7 +80,9 @@ def cond_entropy(y):
     y2 = tf.reduce_sum(y1)/batch_size
     return y2
 
-fake = generator(random_z, reuse=False)
+fake_set = generator_m(random_z, reuse=False)
+fake = tf.concat(fake_set, 0)
+# fake = generator(random_z, reuse=False)
 print('fake shape ',fake.shape)
 r_mean = encoder(real, reuse=False)
 f_mean = encoder(fake)
@@ -92,13 +96,17 @@ f_p = tf.nn.softmax(f_mean)
 
 #discriminator loss
 # with tf.variable_scope('d_loss'):
-weight = tf.placeholder(tf.float32, shape=[])
-init_weight = 1.
-d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + weight*cond_entropy(f_p))  # Equation (7) upper
+d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
 
 #generator loss
 # with tf.variable_scope('g_loss'):
-g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
+g_loss = 0
+for i in range(len(fake_set)):
+    onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=10)
+    f_m = encoder(fake_set[i])
+    # f_l = compute_soft_assign(f_m)
+    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_m, onehot_labels=onehot_labels))
+# g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
 
 
 # trainable variables for each network
@@ -138,8 +146,13 @@ saver = tf.train.Saver(max_to_keep=5)
 # Send summary statistics to TensorBoard
 tf.summary.scalar('d_loss', d_loss)
 tf.summary.scalar('g_loss', g_loss)
-images_from_g = generator(random_z, training=False)
-tf.summary.image('Generator_image', images_from_g, 12)
+
+image_sets = generator(random_z, training= False)
+for img_set in image_sets:
+    tf.summary.image('G_images', img_set, 12)
+
+# images_from_g = generator(random_z, training=False)
+# tf.summary.image('Generator_image', images_from_g, 12)
 
 #predict
 embed_mean = encoder(real)
@@ -187,7 +200,7 @@ def training(max_it, it_offset):
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
         if it > batch_epoch*25:
             # print('decrease G')
-            # _ = sess.run([d_step], feed_dict={real: real_ipt, weight: init_weight})
+            # _ = sess.run([d_step], feed_dict={real: real_ipt})
 
             _ = sess.run([d_rim_step], feed_dict={real: real_ipt})
 
@@ -195,10 +208,7 @@ def training(max_it, it_offset):
             # if it%3 == 0:
             #     _ = sess.run([g_step], feed_dict={real: real_ipt})
         else:
-            if it%(10*batch_epoch) and it > 0:
-                init_weight = init_weight*0.9
-                print('weight ',init_weight)
-            _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt, weight: init_weight})
+            _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt})
 
 
         # sess.run([d_train, g_train], feed_dict={real: real_ipt})
@@ -208,7 +218,6 @@ def training(max_it, it_offset):
             # real_ipt = (data_pool.batch('img')+1)/2.
             # real_ipt_ = (data_pool_2.batch('img')+1)/2.
             summary = sess.run(merged, feed_dict={real: real_ipt,
-                                                  weight: init_weight
                                                 #   real_: real_ipt_,
                                                 #   real_2:(data_pool_3.batch('img')+1)/2.,
                                                 # real_3:(data_pool_4.batch('img')+1)/2.,
