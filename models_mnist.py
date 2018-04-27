@@ -166,6 +166,35 @@ def discriminator(img, dim=64, reuse=True, training=True, name= 'discriminator')
         logit = fc(y, 1)
         return logit
 
+from ops2 import conv2d,bn,linear,deconv2d
+def discriminator2( x, training=True, reuse=True , name="discriminator"):
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = lrelu(conv2d(x, 64, 4, 4, 2, 2, name='d_conv1'))
+        net = lrelu(bn(conv2d(net, 128, 4, 4, 2, 2, name='d_conv2'), is_training=training, scope='d_bn2'))
+        net = tf.reshape(net, [64, -1])
+        net = lrelu(bn(linear(net, 1024, scope='d_fc3'), is_training=training, scope='d_bn3'))
+        out_logit = linear(net, 1, scope='d_fc4')
+        # out = tf.nn.sigmoid(out_logit)
+
+        return out_logit
+
+def generator2(z, training=True, reuse=True, name = "generator"):
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = tf.nn.relu(bn(linear(z, 1024, scope='g_fc1'), is_training=training, scope='g_bn1'))
+        net = tf.nn.relu(bn(linear(net, 128 * 7 * 7, scope='g_fc2'), is_training=training, scope='g_bn2'))
+        net = tf.reshape(net, [64, 7, 7, 128])
+        net = tf.nn.relu(
+                bn(deconv2d(net, [64, 14, 14, 64], 4, 4, 2, 2, name='g_dc3'), is_training=training,
+                   scope='g_bn3'))
+
+        out = tf.nn.sigmoid(deconv2d(net, [64, 28, 28, 1], 4, 4, 2, 2, name='g_dc4'))
+
+        return out
+
 def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
     with tf.variable_scope(name, reuse=reuse):
         # Convolutional Layer #1

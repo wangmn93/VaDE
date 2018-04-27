@@ -12,10 +12,10 @@ import my_utils
 
 
 """ param """
-epoch = 100
+epoch = 40
 batch_size = 64
 lr = 2e-4
-z_dim = 128
+z_dim = 62
 # beta = 1 #diversity hyper param
 # clip = 0.01
 n_critic = 1 #
@@ -28,14 +28,14 @@ data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
 
 """ graphs """
-generator = models.generator
-discriminator = models.discriminator
+generator = models.generator2
+discriminator = models.discriminator2
 optimizer = tf.train.AdamOptimizer
 
 
 # inputs
-real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
-z = tf.placeholder(tf.float32, shape=[None, z_dim])
+real = tf.placeholder(tf.float32, shape=[batch_size, 28, 28, 1])
+z = tf.placeholder(tf.float32, shape=[batch_size, z_dim])
 
 
 # generator
@@ -68,7 +68,7 @@ g_var = [var for var in T_vars if var.name.startswith('g1')]
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
 d_step = optimizer(learning_rate=lr, beta1=0.5).minimize(d_loss, var_list=d_var, global_step=global_step)
-g_step = optimizer(learning_rate=lr, beta1=0.5).minimize(g_loss, var_list=g_var)
+g_step = optimizer(learning_rate=5*lr, beta1=0.5).minimize(g_loss, var_list=g_var)
 
 """ train """
 ''' init '''

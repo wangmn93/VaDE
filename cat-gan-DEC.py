@@ -21,7 +21,7 @@ beta1 = 0.5
 z_dim = 128
 n_critic = 1 #
 n_generator = 1
-gan_type="cat-gan"
+gan_type="cat-gan-DEC"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -101,6 +101,7 @@ d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + weight*cond_entropy(f_p)) 
 g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
 
 
+
 # trainable variables for each network
 T_vars = tf.trainable_variables()
 d_var = [var for var in T_vars if var.name.startswith('discriminator')]
@@ -116,6 +117,25 @@ g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_va
 
 d_rim_loss = d_loss + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
 d_rim_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss, var_list=d_var)
+
+def target_distribution2(q):
+    weight = q ** 1.5 / tf.reduce_sum(q, axis=0)
+    return tf.transpose(tf.transpose(weight)/ tf.reduce_sum(q, axis=1))
+
+# def target_distribution(gamma):
+#
+#     temp = tf.square(gamma)/tf.reduce_sum(gamma,axis=0, keep_dims=True)
+#     temp = temp/tf.reduce_sum(temp, axis=1, keep_dims=True)
+#     return temp
+
+def KL(P,Q):
+    return tf.reduce_sum(P * tf.log(P/Q), [0,1])
+
+t = target_distribution2(f_p)
+# print('target dist: ',t.shape)
+KL_loss = KL(t, f_p)
+
+kl_step = tf.train.AdamOptimizer(learning_rate=2e-4, beta1=0.5).minimize(KL_loss, var_list=d_var)
 # d_updates = my_utils.smorms3(d_loss, d_var)
 #
 # d_train = tf.group(*d_updates)
@@ -189,14 +209,13 @@ def training(max_it, it_offset):
             # print('decrease G')
             # _ = sess.run([d_step], feed_dict={real: real_ipt, weight: init_weight})
 
-            _ = sess.run([d_rim_step], feed_dict={real: real_ipt,weight: init_weight})
+            _ = sess.run([d_rim_step], feed_dict={real: real_ipt})
 
 
             # if it%3 == 0:
             #     _ = sess.run([g_step], feed_dict={real: real_ipt})
         else:
-            if it%(10*batch_epoch)==0 and it > 0:
-                global init_weight
+            if it%(10*batch_epoch) and it > 0:
                 init_weight = init_weight*0.9
                 print('weight ',init_weight)
             _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt, weight: init_weight})
@@ -258,11 +277,31 @@ def training(max_it, it_offset):
         # print("Save sample images")
         training(max_it, it_offset + max_it)
 
+def refine(it):
+    for i in range(it):
+        real_ipt, y = data_pool.batch(['img', 'label'])
+        sess.run([kl_step], feed_dict={real: real_ipt})
+        if i %100==0:
+            print(i)
+        if i%batch_epoch == 0:
+            predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
+            acc = cluster_acc(predict_y, Y[:10000])
+            print('full-acc-EPOCH-%d' % (i // (batch_epoch)), acc[0])
+
+
 total_it = 0
 try:
-    training(max_it,0)
-    total_it = sess.run(global_step)
-    print("Total iterations: "+str(total_it))
+    # training(max_it,0)
+    # total_it = sess.run(global_step)
+    # print("Total iterations: "+str(total_it))
+    ae_saver = tf.train.Saver(var_list=d_var)
+    # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
+    # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
+    ae_saver.restore(sess, 'results/cat-gan-20180427-163030/checkpoint/model.ckpt')  # 0.72
+    predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
+    acc = cluster_acc(predict_y, Y[:10000])
+    print(acc[0])
+    refine(20000)
 except Exception, e:
     traceback.print_exc()
 finally:

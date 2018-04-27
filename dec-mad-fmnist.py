@@ -55,7 +55,7 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-generator = partial(models.generator_m, heads=1)
+generator = partial(models.generator_m, heads=10)
 discriminator = models.discriminator
 sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
@@ -105,7 +105,7 @@ f_logit = discriminator(fake)
 
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
-d_loss = d_loss_real + 1.*d_loss_fake
+d_loss = d_loss_real + 0.1*d_loss_fake
 # g_loss = 0
 g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
 
@@ -141,12 +141,13 @@ KL_loss = KL(t, q)
 # KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-g_loss = 1.*g_loss #weight down real loss
+g_loss = 0.1*g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
     f_l = compute_soft_assign(f_m)
-    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
+    g_loss += tf.reduce_mean(objectives.categorical_crossentropy(onehot_labels, f_l))
+    # g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
 # onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=10)
 

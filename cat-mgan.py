@@ -21,7 +21,7 @@ beta1 = 0.5
 z_dim = 128
 n_critic = 1 #
 n_generator = 1
-gan_type="cat-gan"
+gan_type="cat-mgan"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -96,7 +96,7 @@ f_p = tf.nn.softmax(f_mean)
 
 #discriminator loss
 # with tf.variable_scope('d_loss'):
-d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + cond_entropy(f_p))  # Equation (7) upper
+d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + 0.1*cond_entropy(f_p))  # Equation (7) upper
 
 #generator loss
 # with tf.variable_scope('g_loss'):
@@ -147,7 +147,7 @@ saver = tf.train.Saver(max_to_keep=5)
 tf.summary.scalar('d_loss', d_loss)
 tf.summary.scalar('g_loss', g_loss)
 
-image_sets = generator(random_z, training= False)
+image_sets = generator_m(random_z, training= False)
 for img_set in image_sets:
     tf.summary.image('G_images', img_set, 12)
 
@@ -172,15 +172,15 @@ sess.run(tf.global_variables_initializer())
 batch_epoch = len(data_pool) // (batch_size * n_critic)
 max_it = epoch * batch_epoch
 
-def sample_once(it):
-    rows = 10
-    columns = 10
-    feed = {random_z: np.random.normal(size=[rows * columns, z_dim])}
-    list_of_generators = [images_from_g]  # used for sampling images
-    list_of_names = ['it%d-g.jpg' % it]
-    save_dir = dir + "/sample_imgs"
-    my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
-                             list_of_names=list_of_names, save_dir=save_dir)
+# def sample_once(it):
+#     rows = 10
+#     columns = 10
+#     feed = {random_z: np.random.normal(size=[rows * columns, z_dim])}
+#     list_of_generators = [images_from_g]  # used for sampling images
+#     list_of_names = ['it%d-g.jpg' % it]
+#     save_dir = dir + "/sample_imgs"
+#     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
+#                              list_of_names=list_of_names, save_dir=save_dir)
 
 def cluster_acc(Y_pred, Y):
   from sklearn.utils.linear_assignment_ import linear_assignment

@@ -143,7 +143,8 @@ for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
     f_l = compute_soft_assign(f_m)
-    g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
+    g_loss += tf.reduce_mean(objectives.categorical_crossentropy(onehot_labels, f_l))
+    # g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
 #=======================
 #feature extractor
@@ -429,7 +430,7 @@ def gan_train(max_it, it_offset):
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
         if it%700 ==0 and it != 0:
             global init_weight
-            init_weight = max(0.0000000, init_weight*0.2)
+            init_weight = max(0.0000001, init_weight*0.2)
             print('weight: ',init_weight)
         _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt, weight:init_weight})
         if it % 10 == 0:
