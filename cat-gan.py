@@ -52,6 +52,7 @@ for i in range(1,10):
 generator = models.generator
 # discriminator = partial(models.cnn_classifier_2,out_dim=len(keep))
 encoder = partial(models.cnn_discriminator, out_dim = 10)
+# encoder = partial(models.cat_discriminator2, out_dim = 10)
 # classifier = partial(models.cat_discriminator,out_dim=10)
 optimizer = tf.train.AdamOptimizer
 
@@ -117,8 +118,8 @@ g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_va
 d_rim_loss = d_loss + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
 d_rim_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss, var_list=d_var)
 
-d_rim_loss_2 = -1 * (mar_entropy(r_p) - cond_entropy(r_p)) + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
-d_rim_step_2 = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss_2, var_list=d_var)
+# d_rim_loss_2 = -1 * (mar_entropy(r_p) - cond_entropy(r_p)) + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
+# d_rim_step_2 = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss_2, var_list=d_var)
 # d_updates = my_utils.smorms3(d_loss, d_var)
 #
 # d_train = tf.group(*d_updates)
@@ -204,7 +205,7 @@ def training(max_it, it_offset):
                 print('weight ',init_weight)
             _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt, weight: init_weight})
 
-            # _ = sess.run([d_rim_loss_2], feed_dict={real: real_ipt, weight: init_weight})
+            # _ = sess.run([d_rim_step_2], feed_dict={real: real_ipt, weight: init_weight})
 
 
         # sess.run([d_train, g_train], feed_dict={real: real_ipt})
@@ -245,6 +246,7 @@ def training(max_it, it_offset):
                 # if i == 9:
                 #     plt.legend(loc='best')
             plt.show()
+            # plt.savefig('latent_space-ep%d.png' % (it % (batch_epoch)))
             # print(b)
 
             # real_ipt_ = (data_pool_2.batch('img')+1)/2.

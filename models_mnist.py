@@ -320,6 +320,26 @@ def cat_discriminator(z, out_dim=10, reuse=True, name = "discriminator", trainin
         # y_out = tf.nn.softmax(logits)
         return logits
 
+def cat_discriminator2(z, out_dim=10, reuse=True, name = "discriminator", training = True, stddev=0.3):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu_2, biases_initializer=None)
+    # fc_bn_lrelu_2 = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        # y = z + tf.random_normal(shape=tf.shape(z),mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(z, 1000)
+        # y = y + tf.random_normal(shape=tf.shape(y),mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 500)
+        # y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        # y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        # y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        y = fc_bn_lrelu(y, 250)
+        # y = y + tf.random_normal(shape=tf.shape(y), mean=0, stddev=stddev, dtype=tf.float32)
+        logits = fc(y, out_dim)
+        # y_out = tf.nn.softmax(logits)
+        return logits
+
 def cluster_layer(z, out_c=10,reuse=True, name = "cluster"):
     with tf.variable_scope(name, reuse=reuse):
         y = fc(z, out_c)
