@@ -430,7 +430,7 @@ def gan_train(max_it, it_offset):
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
         if it%700 ==0 and it != 0:
             global init_weight
-            init_weight = max(0.0000001, init_weight*0.2)
+            init_weight = max(0.00001, init_weight*0.5)
             print('weight: ',init_weight)
         _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt, weight:init_weight})
         if it % 10 == 0:

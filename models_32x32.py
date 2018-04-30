@@ -56,11 +56,11 @@ def discriminator(img, dim=64, reuse=True, training=True):
 #         img = tf.tanh(dconv(y, channels, 5, 2))
 #         return img
 
-def decoder(z, dim=64, channels=3, reuse=True, training=True):
+def decoder(z, dim=64, channels=3, reuse=True, training=True, name='decoder'):
     bn = partial(batch_norm, is_training=training)
     dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
 
-    with tf.variable_scope('decoder', reuse=reuse):
+    with tf.variable_scope(name, reuse=reuse):
         y = fc(z, 2 * 2 * dim * 8)
         y = tf.reshape(y, [-1, 2, 2, dim * 8])
         y = relu(bn(y))
@@ -69,3 +69,19 @@ def decoder(z, dim=64, channels=3, reuse=True, training=True):
         y = dconv_bn_relu(y, dim * 1, 5, 2)
         img = tf.sigmoid(dconv(y, channels, 5, 2))
         return img
+
+# def cnn_discriminator(z, out_dim=10, reuse=True, name = "discriminator" , training=True):
+#     lrelu_1 = partial(ops.leak_relu, leak=0.1)
+#     conv_lrelu = partial(conv, activation_fn=lrelu_1)
+#     fc_lrelu = partial(fc, activation_fn=lrelu_1)
+#     with tf.variable_scope(name, reuse=reuse):
+#         y = conv_lrelu(z, 32, 5, 1)
+#         y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
+#         y = conv_lrelu(y, 64, 3, 1)
+#         y = conv_lrelu(y, 64, 3, 1)
+#         y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
+#         y = conv_lrelu(y, 128, 3, 1)
+#         y = conv_lrelu(y, 10, 1, 1)
+#         y = fc_lrelu(y, 128)
+#         y = fc(y,out_dim)
+#         return y

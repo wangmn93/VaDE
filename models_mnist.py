@@ -173,8 +173,10 @@ def discriminator2( x, training=True, reuse=True , name="discriminator"):
     with tf.variable_scope(name, reuse=reuse):
         net = lrelu(conv2d(x, 64, 4, 4, 2, 2, name='d_conv1'))
         net = lrelu(bn(conv2d(net, 128, 4, 4, 2, 2, name='d_conv2'), is_training=training, scope='d_bn2'))
-        net = tf.reshape(net, [64, -1])
-        net = lrelu(bn(linear(net, 1024, scope='d_fc3'), is_training=training, scope='d_bn3'))
+        # net = tf.reshape(net, [batch_size, -1])
+        # net = lrelu(bn(linear(net, 1024, scope='d_fc3'), is_training=training, scope='d_bn3'))
+        net = fc(net,1024)
+        net = lrelu(bn(net, is_training=training, scope='d_bn3'))
         out_logit = linear(net, 1, scope='d_fc4')
         # out = tf.nn.sigmoid(out_logit)
 
@@ -194,6 +196,49 @@ def generator2(z, training=True, reuse=True, name = "generator"):
         out = tf.nn.sigmoid(deconv2d(net, [64, 28, 28, 1], 4, 4, 2, 2, name='g_dc4'))
 
         return out
+
+def generator2_mimic(z, training=True, reuse=True, name="generator"):
+    bn = partial(batch_norm, is_training=training)
+    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = fc_bn_relu(z, 1024)
+        net = fc_bn_relu(net, 128 * 7 * 7)
+        net = tf.reshape(net, [-1, 7, 7, 128])
+        net = dconv_bn_relu(net, 64, 4, 2)
+        net = dconv_bn_relu(net, 1, 4, 2)
+        out = tf.nn.sigmoid(net)
+        # net = tf.nn.relu(
+        #         bn(deconv2d(net, [64, 14, 14, 64], 4, 4, 2, 2, name='g_dc3'), is_training=training,
+        #            scope='g_bn3'))
+        #
+        # out = tf.nn.sigmoid(deconv2d(net, [64, 28, 28, 1], 4, 4, 2, 2, name='g_dc4'))
+
+        return out
+
+def generator_m2(z,heads=10, training=True, reuse=True, name="generator"):
+
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = tf.nn.relu(bn(linear(z, 1024, scope='g_fc1'), is_training=training, scope='g_bn1'))
+        net = tf.nn.relu(bn(linear(net, 128 * 7 * 7, scope='g_fc2'), is_training=training, scope='g_bn2'))
+        net = tf.reshape(net, [64, 7, 7, 128])
+        net = tf.nn.relu(
+                bn(deconv2d(net, [64, 14, 14, 64], 4, 4, 2, 2, name='g_dc3'), is_training=training,
+                   scope='g_bn3'))
+
+        img_sets = []
+        for i in range(heads):
+            out = tf.nn.sigmoid(deconv2d(net, [64, 28, 28, 1], 4, 4, 2, 2, name='g_dc4_h'+str(i)))
+            img_sets.append(out)
+
+        return img_sets
+
+
+
 
 def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
     with tf.variable_scope(name, reuse=reuse):

@@ -12,6 +12,7 @@ import my_utils
 from functools import partial
 from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
+from keras import backend as K
 # tsne = TSNE(n_components=2)
 """ param """
 epoch = 40
@@ -57,66 +58,79 @@ optimizer = tf.train.AdamOptimizer
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
-random_z = tf.random_normal(shape=(batch_size, z_dim),
-                       mean=0, stddev=1, dtype=tf.float32)
+# random_z = tf.random_normal(shape=(batch_size, z_dim),
+#                        mean=0, stddev=1, dtype=tf.float32)
 
-#marginal entropy
-def mar_entropy(y):
-    # y1 = F.sum(y, axis=0) / batchsize
-    # y2 = F.sum(-y1 * F.log(y1))
-    # return y2
-    y1 = tf.reduce_mean(y,axis=0)
-    y2=tf.reduce_sum(-y1*tf.log(y1))
-    return y2
+with tf.variable_scope('kmean', reuse=False):
+    tf.get_variable("u_p", [10, 10], dtype=tf.float32)
 
-#conditional entropy
-def cond_entropy(y):
-    # y1 = -y * F.log(y)
-    # y2 = F.sum(y1) / batchsize
-    # return y2
-    y1=-y*tf.log(y)
-    y2 = tf.reduce_sum(y1)/batch_size
-    return y2
+# #marginal entropy
+# def mar_entropy(y):
+#     # y1 = F.sum(y, axis=0) / batchsize
+#     # y2 = F.sum(-y1 * F.log(y1))
+#     # return y2
+#     y1 = tf.reduce_mean(y,axis=0)
+#     y2=tf.reduce_sum(-y1*tf.log(y1))
+#     return y2
+#
+# #conditional entropy
+# def cond_entropy(y):
+#     # y1 = -y * F.log(y)
+#     # y2 = F.sum(y1) / batchsize
+#     # return y2
+#     y1=-y*tf.log(y)
+#     y2 = tf.reduce_sum(y1)/batch_size
+#     return y2
 
-fake = generator(random_z, reuse=False)
-print('fake shape ',fake.shape)
+# fake = generator(random_z, reuse=False)
+# print('fake shape ',fake.shape)
 r_mean = encoder(real, reuse=False)
-f_mean = encoder(fake)
+# f_mean = encoder(fake)
 # with tf.variable_scope('cluster_layer', reuse=False):
 #     theta_p = tf.get_variable('theta_p')
 #     u_p = tf.get_variable('u_p')
 #     lambda_p = tf.get_variable('lambda_p')
 # real_flatten = tf.reshape(real, [-1, original_dim
 r_p = tf.nn.softmax(r_mean)
-f_p = tf.nn.softmax(f_mean)
+# f_p = tf.nn.softmax(f_mean)
 
 #discriminator loss
 # with tf.variable_scope('d_loss'):
-weight = tf.placeholder(tf.float32, shape=[])
-init_weight = 1.
-d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + weight*cond_entropy(f_p))  # Equation (7) upper
+# weight = tf.placeholder(tf.float32, shape=[])
+# init_weight = 1.
+# d_loss = -1 * (mar_entropy(r_p) - cond_entropy(r_p) + weight*cond_entropy(f_p))  # Equation (7) upper
 
 #generator loss
 # with tf.variable_scope('g_loss'):
-g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
+# g_loss = -mar_entropy(f_p) + cond_entropy(f_p)  # Equation (7) lower
 
 
 
 # trainable variables for each network
 T_vars = tf.trainable_variables()
 d_var = [var for var in T_vars if var.name.startswith('discriminator')]
-g_var = [var for var in T_vars if var.name.startswith('generator')]
+# g_var = [var for var in T_vars if var.name.startswith('generator')]
+kmean_var = [var for var in T_vars if var.name.startswith('kmean')]
 # d_var_for_save = tf.global_variables('classifier')
 
 
 # optims
 global_step = tf.Variable(0, name='global_step',trainable=False)
-d_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_loss, var_list=d_var, global_step=global_step)
-g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_var)
+# d_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_loss, var_list=d_var, global_step=global_step)
+# g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_var)
 
 
-d_rim_loss = d_loss + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
-d_rim_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss, var_list=d_var)
+# d_rim_loss = d_loss + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
+# d_rim_step = optimizer(learning_rate=lr, beta1=beta1).minimize(d_rim_loss, var_list=d_var)
+
+def compute_soft_assign(z):
+    with tf.variable_scope('kmean', reuse=True):
+        theta_p = tf.get_variable('u_p')
+    alpha = 1.
+    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - theta_p), axis=2) / alpha))
+    q **= (alpha + 1.0) / 2.0
+    q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
+    return q
 
 def target_distribution2(q):
     weight = q ** 1.5 / tf.reduce_sum(q, axis=0)
@@ -131,11 +145,18 @@ def target_distribution2(q):
 def KL(P,Q):
     return tf.reduce_sum(P * tf.log(P/Q), [0,1])
 
-t = target_distribution2(f_p)
+q = compute_soft_assign(r_mean)
+predicts = tf.argmax(q, axis=1)
+print('soft dist: ',q.shape)
+# t = target_distribution2(q)
 # print('target dist: ',t.shape)
-KL_loss = KL(t, f_p)
+# KL_loss = KL(t, q)
+t = target_distribution2(q)
+# print('target dist: ',t.shape)
+KL_loss = KL(t, q)# + 0.001 * tf.add_n([ tf.nn.l2_loss(v) for v in d_var])
 
-kl_step = tf.train.AdamOptimizer(learning_rate=2e-4, beta1=0.5).minimize(KL_loss, var_list=d_var)
+# kl_step = tf.train.AdamOptimizer(learning_rate=2e-4, beta1=0.5).minimize(KL_loss, var_list=d_var)
+kl_step = tf.train.MomentumOptimizer(learning_rate=0.002, momentum=0.9).minimize(KL_loss, var_list=d_var+kmean_var)
 # d_updates = my_utils.smorms3(d_loss, d_var)
 #
 # d_train = tf.group(*d_updates)
@@ -156,15 +177,15 @@ saver = tf.train.Saver(max_to_keep=5)
 # d_saver = tf.train.Saver(var_list=d_var_for_save)
 # summary writer
 # Send summary statistics to TensorBoard
-tf.summary.scalar('d_loss', d_loss)
-tf.summary.scalar('g_loss', g_loss)
-images_from_g = generator(random_z, training=False)
-tf.summary.image('Generator_image', images_from_g, 12)
+# tf.summary.scalar('d_loss', d_loss)
+# tf.summary.scalar('g_loss', g_loss)
+# images_from_g = generator(random_z, training=False)
+# tf.summary.image('Generator_image', images_from_g, 12)
 
 #predict
-embed_mean = encoder(real)
-y = tf.nn.softmax(embed_mean)
-predicts = tf.argmax(y,axis=1)
+# embed_mean = encoder(real)
+# y = tf.nn.softmax(embed_mean)
+# predicts = tf.argmax(y,axis=1)
 
 
 merged = tf.summary.merge_all()
@@ -179,15 +200,15 @@ sess.run(tf.global_variables_initializer())
 batch_epoch = len(data_pool) // (batch_size * n_critic)
 max_it = epoch * batch_epoch
 
-def sample_once(it):
-    rows = 10
-    columns = 10
-    feed = {random_z: np.random.normal(size=[rows * columns, z_dim])}
-    list_of_generators = [images_from_g]  # used for sampling images
-    list_of_names = ['it%d-g.jpg' % it]
-    save_dir = dir + "/sample_imgs"
-    my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
-                             list_of_names=list_of_names, save_dir=save_dir)
+# def sample_once(it):
+#     rows = 10
+#     columns = 10
+#     feed = {random_z: np.random.normal(size=[rows * columns, z_dim])}
+#     list_of_generators = [images_from_g]  # used for sampling images
+#     list_of_names = ['it%d-g.jpg' % it]
+#     save_dir = dir + "/sample_imgs"
+#     my_utils.sample_and_save(sess=sess, list_of_generators=list_of_generators, feed_dict=feed,
+#                              list_of_names=list_of_names, save_dir=save_dir)
 
 def cluster_acc(Y_pred, Y):
   from sklearn.utils.linear_assignment_ import linear_assignment
@@ -199,50 +220,97 @@ def cluster_acc(Y_pred, Y):
   ind = linear_assignment(w.max() - w)
   return sum([w[i,j] for i,j in ind])*1.0/Y_pred.size, w
 
-def training(max_it, it_offset):
-    print("Max iteration: " + str(max_it))
-    # total_it = it_offset + max_it
-    for it in range(it_offset, it_offset + max_it):
+# def training(max_it, it_offset):
+#     print("Max iteration: " + str(max_it))
+#     # total_it = it_offset + max_it
+#     for it in range(it_offset, it_offset + max_it):
+#         real_ipt, y = data_pool.batch(['img', 'label'])
+#         # z_ipt = np.random.normal(size=[batch_size, z_dim])
+#         if it > batch_epoch*25:
+#             # print('decrease G')
+#             # _ = sess.run([d_step], feed_dict={real: real_ipt, weight: init_weight})
+#
+#             _ = sess.run([d_rim_step], feed_dict={real: real_ipt})
+#
+#
+#             # if it%3 == 0:
+#             #     _ = sess.run([g_step], feed_dict={real: real_ipt})
+#         else:
+#             if it%(10*batch_epoch) and it > 0:
+#                 init_weight = init_weight*0.9
+#                 print('weight ',init_weight)
+#             _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt, weight: init_weight})
+#
+#
+#         # sess.run([d_train, g_train], feed_dict={real: real_ipt})
+#         # _ = sess.run([g_step], feed_dict={random_z: z_ipt})
+#
+#         if it%10 == 0 :
+#             # real_ipt = (data_pool.batch('img')+1)/2.
+#             # real_ipt_ = (data_pool_2.batch('img')+1)/2.
+#             summary = sess.run(merged, feed_dict={real: real_ipt,
+#                                                   weight: init_weight
+#                                                 #   real_: real_ipt_,
+#                                                 #   real_2:(data_pool_3.batch('img')+1)/2.,
+#                                                 # real_3:(data_pool_4.batch('img')+1)/2.,
+#                                                   #random_z: np.random.normal(size=[batch_size, z_dim])
+#                                                   })
+#             writer.add_summary(summary, it)
+#         #
+#         if it%(batch_epoch) == 0:
+#             predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
+#             acc = cluster_acc(predict_y, Y[:10000])
+#             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+#
+#             plt.clf()
+#             sample = sess.run(embed_mean, feed_dict={real: test_data_list})
+#             # X_embedded = tsne.fit_transform(sample)
+#             X_embedded = TSNE(n_components=2).fit_transform(sample)
+#             for i in range(10):
+#                 plt.scatter(X_embedded[i * 100:(i + 1) * 100, 0], X_embedded[i * 100:(i + 1) * 100, 1], color=colors[i],
+#                             label=str(i), s=2)
+#                 plt.draw()
+#                 # if i == 9:
+#                 #     plt.legend(loc='best')
+#             plt.show()
+#             # print(b)
+#
+#             # real_ipt_ = (data_pool_2.batch('img')+1)/2.
+#             # y1, y2, y3, = sess.run([predict_y_1, predict_y_2, predict_y_3], feed_dict={real_: real_ipt_,
+#             #                                       real_2:(data_pool_3.batch('img')+1)/2.,
+#             #                                     real_3:(data_pool_4.batch('img')+1)/2.,})
+#             # print(y1)
+#             # print(y2)
+#             # print(y3)
+#             # print('-----')
+#
+#             # for i,j,k in zip(y1,y2,y3):
+#             #     counts_1 = counts_2 = counts_3 = [0,0,0]
+#             #     counts_1[i] += 1
+#             #     counts_2[i] += 1
+#             #     counts_3[i] += 1
+#             #     print(counts_1)
+#
+#
+#     var = raw_input("Continue training for %d iterations?" % max_it)
+#     if var.lower() == 'y':
+#         # sample_once(it_offset + max_it)
+#         # print("Save sample images")
+#         training(max_it, it_offset + max_it)
+
+def refine(it):
+    for i in range(it):
         real_ipt, y = data_pool.batch(['img', 'label'])
-        # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        if it > batch_epoch*25:
-            # print('decrease G')
-            # _ = sess.run([d_step], feed_dict={real: real_ipt, weight: init_weight})
-
-            _ = sess.run([d_rim_step], feed_dict={real: real_ipt})
-
-
-            # if it%3 == 0:
-            #     _ = sess.run([g_step], feed_dict={real: real_ipt})
-        else:
-            if it%(10*batch_epoch) and it > 0:
-                init_weight = init_weight*0.9
-                print('weight ',init_weight)
-            _, _ = sess.run([d_step, g_step], feed_dict={real: real_ipt, weight: init_weight})
-
-
-        # sess.run([d_train, g_train], feed_dict={real: real_ipt})
-        # _ = sess.run([g_step], feed_dict={random_z: z_ipt})
-
-        if it%10 == 0 :
-            # real_ipt = (data_pool.batch('img')+1)/2.
-            # real_ipt_ = (data_pool_2.batch('img')+1)/2.
-            summary = sess.run(merged, feed_dict={real: real_ipt,
-                                                  weight: init_weight
-                                                #   real_: real_ipt_,
-                                                #   real_2:(data_pool_3.batch('img')+1)/2.,
-                                                # real_3:(data_pool_4.batch('img')+1)/2.,
-                                                  #random_z: np.random.normal(size=[batch_size, z_dim])
-                                                  })
-            writer.add_summary(summary, it)
-        #
-        if it%(batch_epoch) == 0:
+        sess.run([kl_step], feed_dict={real: real_ipt})
+        # if i %100==0:
+        #     print(i)
+        if i%100 == 0:
             predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
             acc = cluster_acc(predict_y, Y[:10000])
-            print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
+            print('full-acc-EPOCH-%d' % (i // (batch_epoch)), acc[0])
 
             plt.clf()
-            sample = sess.run(embed_mean, feed_dict={real: test_data_list})
+            sample = sess.run(r_mean, feed_dict={real: test_data_list})
             # X_embedded = tsne.fit_transform(sample)
             X_embedded = TSNE(n_components=2).fit_transform(sample)
             for i in range(10):
@@ -252,41 +320,6 @@ def training(max_it, it_offset):
                 # if i == 9:
                 #     plt.legend(loc='best')
             plt.show()
-            # print(b)
-
-            # real_ipt_ = (data_pool_2.batch('img')+1)/2.
-            # y1, y2, y3, = sess.run([predict_y_1, predict_y_2, predict_y_3], feed_dict={real_: real_ipt_,
-            #                                       real_2:(data_pool_3.batch('img')+1)/2.,
-            #                                     real_3:(data_pool_4.batch('img')+1)/2.,})
-            # print(y1)
-            # print(y2)
-            # print(y3)
-            # print('-----')
-
-            # for i,j,k in zip(y1,y2,y3):
-            #     counts_1 = counts_2 = counts_3 = [0,0,0]
-            #     counts_1[i] += 1
-            #     counts_2[i] += 1
-            #     counts_3[i] += 1
-            #     print(counts_1)
-
-
-    var = raw_input("Continue training for %d iterations?" % max_it)
-    if var.lower() == 'y':
-        # sample_once(it_offset + max_it)
-        # print("Save sample images")
-        training(max_it, it_offset + max_it)
-
-def refine(it):
-    for i in range(it):
-        real_ipt, y = data_pool.batch(['img', 'label'])
-        sess.run([kl_step], feed_dict={real: real_ipt})
-        if i %100==0:
-            print(i)
-        if i%batch_epoch == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
-            acc = cluster_acc(predict_y, Y[:10000])
-            print('full-acc-EPOCH-%d' % (i // (batch_epoch)), acc[0])
 
 
 total_it = 0
@@ -298,9 +331,31 @@ try:
     # ae_saver.restore(sess, 'results/ae-20180411-193032/checkpoint/model.ckpt')
     # ae_saver.restore(sess, 'results/ae-20180413-103410/checkpoint/model.ckpt') #ep100 SGD Momentum 0.94
     ae_saver.restore(sess, 'results/cat-gan-20180427-163030/checkpoint/model.ckpt')  # 0.72
-    predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
-    acc = cluster_acc(predict_y, Y[:10000])
-    print(acc[0])
+    # predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
+    # acc = cluster_acc(predict_y, Y[:10000])
+    # print(acc[0])
+
+    from sklearn.cluster import KMeans
+    # sample = sess.run(r_mean, feed_dict={real: X[:10000]})
+    # kmean = KMeans(n_clusters=10, n_init=20).fit(sample)
+    # centroids = kmean.cluster_centers_
+    # predict_y_K = kmean.predict(sample)
+    # # predict_y = sess.run(predicts, feed_dict={real: X})
+    # acc = cluster_acc(predict_y_K, Y[:10000])
+    # print('KMEAN-acc-EPOCH-feature', acc[0])
+
+    sample = sess.run(r_mean, feed_dict={real: X[:10000]})
+    kmean = KMeans(n_clusters=10, n_init=20).fit(sample)
+    # centroids = kmean.cluster_centers_
+    predict_y_K = kmean.predict(sample)
+    # predict_y = sess.run(predicts, feed_dict={real: X})
+    acc = cluster_acc(predict_y_K, Y[:10000])
+    print('KMEAN-acc-EPOCH-softmax', acc[0])
+    with tf.variable_scope('kmean', reuse=True):
+        # theta_p = tf.get_variable('theta_p')
+        u_p = tf.get_variable('u_p')
+    sess.run(u_p.assign(kmean.cluster_centers_)) #kmean init
+
     refine(20000)
 except Exception, e:
     traceback.print_exc()

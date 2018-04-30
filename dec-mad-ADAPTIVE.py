@@ -35,7 +35,7 @@ is_pretrain = True
 
 n_critic = 1 #
 n_generator = 1
-gan_type="dec-mad"
+gan_type="dec-mad-ADAPTIVE"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
@@ -107,8 +107,13 @@ f_logit = discriminator(fake)
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
 d_loss = d_loss_real + (1./num_heads)*d_loss_fake
-# g_loss = 0
-g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
+
+g_loss = 0
+diversity_weight = tf.get_variable("diversity_term", [10], dtype=tf.float32)
+for i in range(len(fake_set)):
+    # onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
+    f_logit_temp = discriminator(fake_set[i])
+    g_loss += diversity_weight[i]*tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit_temp, labels=tf.ones_like(f_logit_temp)))
 
 
 def compute_soft_assign(z):
@@ -143,15 +148,14 @@ KL_loss = KL(t, q)
 # KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-real_weight = tf.placeholder(tf.float32, shape=[])
-real_weight_init = 1.
-g_loss = real_weight*g_loss #weight down real loss
-diversity_weight = tf.get_variable("diversity_term", [10], dtype=tf.float32)
+# real_weight = tf.placeholder(tf.float32, shape=[])
+# real_weight_init = 1.
+g_loss = g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
     f_l = compute_soft_assign(f_m)
-    g_loss += diversity_weight[i]*tf.reduce_mean(objectives.categorical_crossentropy(onehot_labels,f_l))
+    g_loss += tf.reduce_mean(objectives.categorical_crossentropy(onehot_labels,f_l))
     # g_loss += tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
 # onehot_labels_zero = tf.one_hot(indices=tf.zeros(batch_size, tf.int32), depth=10)
@@ -347,7 +351,7 @@ def training(max_it, it_offset):
         # if it>10000:
         #     _, _ = sess.run([c_step, gmm_step], feed_dict={random_z: z_ipt})
         if it%10 == 0 :
-            summary = sess.run(merged, feed_dict={real: real_ipt, real_weight:real_weight_init})
+            summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
             predict_y = sess.run(predicts2, feed_dict={real2: X})
@@ -440,13 +444,13 @@ def gan_train(max_it, it_offset):
         real_ipt, y = data_pool.batch(['img', 'label'])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
         # z_ipt = np.random.normal(size=[batch_size, z_dim])
-        if it%700 == 0 and it >0:
-            global real_weight_init
-            real_weight_init = max(0.00001, real_weight_init * 0.5)
-            print('real weight: ', real_weight_init)
-        _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt, real_weight: real_weight_init})
+        # if it%700 == 0 and it >0:
+        #     global real_weight_init
+        #     real_weight_init = max(0.00001, real_weight_init * 0.5)
+        #     print('real weight: ', real_weight_init)
+        _, _ = sess.run([d_step,g_step], feed_dict={real: real_ipt})
         if it % 10 == 0:
-            summary = sess.run(merged, feed_dict={real: real_ipt, real_weight: real_weight_init})
+            summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
 total_it = 0
 try:
@@ -474,13 +478,20 @@ try:
 
     dist = np.array(dist)
     print(np.array(dist) / float(num_data))
-
+    
     # w = float(num_data)/dist/np.amax(float(num_data)/dist)
     # w = w**2
     # w = w/np.amax(w)
-    # sess.run(diversity_weight.assign(w))
+    # # sess.run(diversity_weight.assign(w))
     # print(w)
-    sess.run(diversity_weight.assign([1.]*10))
+    manual_diversity = []
+    for i in range(10):
+        var = raw_input("%d-th weight"%i)
+        manual_diversity.append(float(var))
+
+    print(manual_diversity)
+    # sess.run(diversity_weight.assign([0.1]*10))
+    sess.run(diversity_weight.assign(manual_diversity))
 
 
 

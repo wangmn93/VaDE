@@ -21,7 +21,7 @@ beta1 = 0.5
 z_dim = 128
 n_critic = 1 #
 n_generator = 1
-gan_type="cat-gan"
+gan_type="cat-gan-cifar"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
@@ -29,10 +29,11 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 # keep = range(10)
 # keep = [1,3,5]
 # data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+data_pool = my_utils.get_FullCifar10Datapool(batch_size, shift=False) # -1 ~ 1
+X, Y = my_utils.load_full_cifar_10(shift=False)
 # X, Y = my_utils.load_data('mnist')
-X = np.reshape(X, [70000,28,28,1])
+X = np.reshape(X, [len(X), 3, 32, 32])
+X = X.transpose([0, 2, 3, 1])
 num_data = 70000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
@@ -49,14 +50,15 @@ for i in range(1,10):
 
 """ graphs """
 # generator = partial(models.generator_m, heads=1)
-generator = models.generator
+from models_32x32 import decoder as cifar_g
+generator = partial(cifar_g, name='generator')
 # discriminator = partial(models.cnn_classifier_2,out_dim=len(keep))
-encoder = partial(models.cnn_discriminator, out_dim = 10)
+encoder = partial(models.cnn_discriminator_cifar, out_dim = 10)
 # classifier = partial(models.cat_discriminator,out_dim=10)
 optimizer = tf.train.AdamOptimizer
 
 # inputs
-real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
+real = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 random_z = tf.random_normal(shape=(batch_size, z_dim),
                        mean=0, stddev=1, dtype=tf.float32)
 
@@ -223,8 +225,8 @@ def training(max_it, it_offset):
             writer.add_summary(summary, it)
         #
         if it%(batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
-            acc = cluster_acc(predict_y, Y[:10000])
+            predict_y = sess.run(predicts, feed_dict={real: X[:2000]})
+            acc = cluster_acc(predict_y, Y[:2000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
 
 
@@ -232,7 +234,7 @@ def training(max_it, it_offset):
             for j in predict_y:
                 dist[j] += 1
             dist = np.array(dist)
-            print(np.array(dist) / float(10000))
+            print(np.array(dist) / float(2000))
 
             plt.clf()
             sample = sess.run(embed_mean, feed_dict={real: test_data_list})

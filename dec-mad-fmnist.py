@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 """ param """
-epoch = 100
-batch_size = 100
+epoch = 40
+batch_size = 64
 # lr = 1e-3
 lr_nn = 0.002
 # decay_n = 10
@@ -55,9 +55,9 @@ colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple
 """ graphs """
 encoder = partial(models.encoder, z_dim = z_dim)
 decoder = models.decoder
-generator = partial(models.generator_m, heads=10)
-discriminator = models.discriminator
-sampleing = models.sampleing
+generator = partial(models.generator_m2, heads=10)
+discriminator = models.discriminator2
+# sampleing = models.sampleing
 optimizer = tf.train.AdamOptimizer
 
 with tf.variable_scope('kmean', reuse=False):
@@ -70,11 +70,11 @@ with tf.variable_scope('kmean', reuse=False):
 #     tf.get_variable("lambda_p", [z_dim, n_centroid], dtype=tf.float32)
 
 # inputs
-real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
-
+real = tf.placeholder(tf.float32, shape=[batch_size, 28, 28, 1])
+real2 = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 # encoder
 z_mean, _ = encoder(real, reuse=False)
-
+z_mean2, _ = encoder(real2)
 #sampleing
 # z = sampleing(z_mean, z_log_var)
 
@@ -95,7 +95,7 @@ recon_loss = tf.reduce_mean(recon_loss)
 
 
 #=====================
-z = tf.random_normal(shape=(batch_size, 128),
+z = tf.random_normal(shape=(batch_size, 62),
                        mean=0, stddev=1, dtype=tf.float32)
 # z =  tf.placeholder(tf.float32, shape=[None, z_dim])
 fake_set = generator(z, reuse=False)
@@ -141,7 +141,7 @@ KL_loss = KL(t, q)
 # KL_recon_loss = beta*KL_loss + recon_loss
 
 f_logit_set = []
-g_loss = 0.1*g_loss #weight down real loss
+g_loss = 0.5*g_loss #weight down real loss
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
     f_m, _ = encoder(fake_set[i])
@@ -173,7 +173,7 @@ ae_step = optimizer(learning_rate=learning_rate).minimize(recon_loss, var_list=e
 kl_step = tf.train.MomentumOptimizer(learning_rate=0.0002, momentum=0.9).minimize(KL_loss, var_list=kmean_var+en_var)
 
 d_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(d_loss, var_list=dis_var)
-g_step = optimizer(learning_rate=0.0002, beta1=0.5).minimize(g_loss, var_list=g_var)
+g_step = optimizer(learning_rate=5*0.0002, beta1=0.5).minimize(g_loss, var_list=g_var)
 # recon_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(recon_loss, var_list=de_var+en_var)
 # kl_recon_step = tf.train.AdamOptimizer(learning_rate=0.002).minimize(KL_recon_loss, var_list=de_var+en_var)
 """ train """
@@ -230,7 +230,7 @@ def kmean_init():
     # imgs = full_data_pool.batch('img')
     # imgs = (imgs + 1) / 2.
 
-    sample = sess.run(z_mean, feed_dict={real:X})
+    sample = sess.run(z_mean2, feed_dict={real2:X})
     kmeans = KMeans(n_clusters=n_centroid, n_init=20).fit(sample)
         # GaussianMixture(n_components=n_classes,
         #                 covariance_type=cov_type
@@ -343,27 +343,27 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
-            acc = cluster_acc(predict_y, Y)
-            print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
-            plt.clf()
-            sample = sess.run(z_mean, feed_dict={real: test_data_list})
-            X_embedded = tsne.fit_transform(sample)
-            for i in range(10):
-                plt.scatter(X_embedded[i * numPerClass:(i + 1) * numPerClass, 0],
-                            X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
-                            color=colors[i],
-                            label=str(i), s=2)
-                # for test_d in test_data:
-                #     sample = sess.run(z_mean, feed_dict={real: test_d})
-                #     # X_embedded = sample
-                #     X_embedded = TSNE(n_components=2).fit_transform(sample)
-                #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
-                #     i += 1
-                plt.draw()
-            # plt.legend(loc='best')
-            plt.show()
+        # if it % (batch_epoch) == 0:
+        #     predict_y = sess.run(predicts, feed_dict={real: X})
+        #     acc = cluster_acc(predict_y, Y)
+        #     print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+        #     plt.clf()
+        #     sample = sess.run(z_mean, feed_dict={real: test_data_list})
+        #     X_embedded = tsne.fit_transform(sample)
+        #     for i in range(10):
+        #         plt.scatter(X_embedded[i * numPerClass:(i + 1) * numPerClass, 0],
+        #                     X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
+        #                     color=colors[i],
+        #                     label=str(i), s=2)
+        #         # for test_d in test_data:
+        #         #     sample = sess.run(z_mean, feed_dict={real: test_d})
+        #         #     # X_embedded = sample
+        #         #     X_embedded = TSNE(n_components=2).fit_transform(sample)
+        #         #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
+        #         #     i += 1
+        #         plt.draw()
+        #     # plt.legend(loc='best')
+        #     plt.show()
 #
 #     var = raw_input("Continue training for %d iterations?" % max_it)
 #     if var.lower() == 'y':
@@ -447,6 +447,18 @@ try:
 except Exception, e:
     traceback.print_exc()
 finally:
+    import utils
+    i = 0
+    for f in fake_set:
+        sample_imgs = sess.run(f)
+        # if normalize:
+        #     for i in range(len(sample_imgs)):
+        sample_imgs = sample_imgs * 2. - 1.
+        save_dir = dir + "/sample_imgs"
+        utils.mkdir(save_dir + '/')
+        # for imgs, name in zip(sample_imgs, list_of_names):
+        my_utils.saveSampleImgs(imgs=sample_imgs, full_path=save_dir + "/" + 'sample-%d.jpg' % i, row=8, column=8)
+        i += 1
     # var = raw_input("Save sample images?")
     # if var.lower() == 'y':
     #     sample_once(total_it)
