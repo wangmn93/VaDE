@@ -222,13 +222,14 @@ def training(max_it, it_offset):
             # predict_y_2 = sess.run(predicts, feed_dict={real: X[35000:]})
             acc = cluster_acc(predict_y, Y[:2000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
-#            dist = [0] * 10
-#            t_dist = [0] * 10
-#            for py, y_ in zip(predict_y, Y[:40000]):
-#                dist[py] += 1
-#                t_dist[y_] += 1
-#            print('true dist: ', np.array(t_dist) / float(len(predict_y)))
-#            print('pred dist: ', np.array(dist) / float(len(predict_y)))
+            dist = [0] * 10
+
+            t_dist = [0] * 10
+            for py, y_ in zip(predict_y, Y[:2000]):
+               dist[py] += 1
+               t_dist[y_] += 1
+            print('true dist: ', np.array(t_dist) / float(len(predict_y)))
+            print('pred dist: ', np.array(dist) / float(len(predict_y)))
             
 #            plt.clf()
 #            sample = sess.run(embed_mean, feed_dict={real: test_data_list})

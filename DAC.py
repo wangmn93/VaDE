@@ -18,19 +18,20 @@ import math
 from keras import objectives
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
+from matplotlib import pyplot as plt
 
 def sigmoid_cross_entropy_without_sum(predict ,label):
     epsilon = 1e-5
     loss = -(label * tf.log(epsilon + predict) + (1 - label) * tf.log(epsilon + 1 - predict))
     return loss
 
-batch_size = 32
+batch_size = 1000
 learning_rate = 0.001
 epochs = 100
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
+data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+# X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 real = tf.placeholder(tf.float32, [None, 28, 28, 1])
 # keep_prob = tf.placeholder(tf.float32)
@@ -132,9 +133,11 @@ for i in range(epochs):
                         # after_mask_1,
                         # after_mask_2
                         ], feed_dict={real: real_ipt})
+
+        # a = 0
         if it%500==0:
             print('loss',out[2])
-        a=0
+        # a=0
     _, u_thres, l_thres = sess.run([adaptive_step, u_alpha, l_alpha], feed_dict={})
     print('u_thres',u_thres,'l_thres', l_thres)
     # from sklearn.cluster import KMeans
@@ -147,5 +150,60 @@ for i in range(epochs):
     acc = my_utils.cluster_acc(predict_y[0], Y[:2000])
     print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
     a=0
+
+    fs, u_h, u_l = sess.run([feature_labels, u_alpha, l_alpha], feed_dict={real: real_ipt})
+
+    sim = []
+    dis_sim = []
+    for count, elem in enumerate(fs[1:]):
+        s = np.dot(fs[0, :], elem)
+        # b = 0
+        if s > u_h and len(sim)<10:
+            img = np.reshape(real_ipt[count], [28, 28])
+            sim.append(img)
+            print('sim', s)
+            f, axarr = plt.subplots(1, 2)
+            axarr[0].imshow(np.reshape(real_ipt[0], [28, 28]), cmap='gray')
+            axarr[1].imshow(img, cmap='gray')
+
+            # plt.figure()
+            # plt.imshow()
+            plt.show()
+
+        if s < u_l  and len(dis_sim)<10:
+            img = np.reshape(real_ipt[count], [28, 28])
+            dis_sim.append(img)
+            print('sim score', s)
+            f, axarr = plt.subplots(1, 2)
+            axarr[0].imshow(np.reshape(real_ipt[0], [28, 28]), cmap='gray')
+            axarr[1].imshow(img, cmap='gray')
+
+            # plt.figure()
+            # plt.imshow()
+            plt.show()
+        # f, axarr = plt.subplots(3, 3)
+        # axarr[0,0].imshow(np.reshape(real_ipt[0], [28, 28]), cmap='gray')
+        # b = sim[0]
+        # axarr[0,1].imshow(sim[0], cmap='gray')
+        # axarr[0, 2].imshow(sim[1], cmap='gray')
+        # axarr[1, 0].imshow(sim[2], cmap='gray')
+        # axarr[1, 1].imshow(sim[3], cmap='gray')
+        # axarr[1,2].imshow(sim[4], cmap='gray')
+        # axarr[2, 0].imshow(sim[5], cmap='gray')
+        # axarr[2, 1].imshow(sim[6], cmap='gray')
+        # axarr[2, 2].imshow(sim[7], cmap='gray')
+        # plt.show()
+
+        # f, axarr = plt.subplots(3, 3)
+        # axarr[0, 0].imshow(np.reshape(real_ipt[0], [28, 28]), cmap='gray')
+        # axarr[0, 1].imshow(dis_sim[0], cmap='gray')
+        # axarr[0, 2].imshow(dis_sim[1], cmap='gray')
+        # axarr[1, 0].imshow(dis_sim[2], cmap='gray')
+        # axarr[1, 1].imshow(dis_sim[3], cmap='gray')
+        # axarr[1, 2].imshow(dis_sim[4], cmap='gray')
+        # axarr[2, 0].imshow(dis_sim[5], cmap='gray')
+        # axarr[2, 1].imshow(dis_sim[6], cmap='gray')
+        # axarr[2, 2].imshow(dis_sim[7], cmap='gray')
+        # plt.show()
 
 sess.close()

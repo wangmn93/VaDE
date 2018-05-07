@@ -128,7 +128,7 @@ g_step = optimizer(learning_rate=5*0.0002, beta1=0.5).minimize(g_loss, var_list=
 """ train """
 ''' init '''
 # session
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
 # saver
@@ -191,17 +191,20 @@ try:
     # a =0
     # pretrain(300)
     ae_saver = tf.train.Saver(var_list=en_var)
-    ae_saver.restore(sess, 'results/cat-gan-20180427-163030/checkpoint/model.ckpt')  # 0.72
+    ae_saver.restore(sess, 'results/cat-gan-20180427-163030/checkpoint/model.ckpt')  # 0.73
     # ae_saver.restore(sess, 'results/cat-gan-20180430-212721/checkpoint/model.ckpt') #0.49
     # ae_saver.restore(sess,'results/cat-gan-20180430-213911/checkpoint/model.ckpt') #encoder
-
+    dist = [0]*10
     predict_y = sess.run(predicts, feed_dict={real2: X[:2000]})
     acc = cluster_acc(predict_y, Y[:2000])
     print(acc[0])
+    for i in predict_y:
+        dist[i] += 1
+    print(np.array(dist)/float(2000))
     # load_kmean = kmean_init()
     # sess.run(load_kmean)
     # training(10*batch_epoch,0)
-    gan_train(max_it, 0)
+    # gan_train(max_it, 0)
     # recon_training(max_it,0)
     # total_it = sess.run(global_step)
     # print("Total iterations: "+str(total_it))

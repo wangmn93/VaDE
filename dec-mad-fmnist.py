@@ -132,7 +132,9 @@ def KL(P,Q):
     return tf.reduce_sum(P * tf.log(P/Q), [0,1])
 
 q = compute_soft_assign(z_mean)
+q2 = compute_soft_assign(z_mean2)
 predicts = tf.argmax(q, axis=1)
+predicts2 = tf.argmax(q2, axis=1)
 print('soft dist: ',q.shape)
 t = target_distribution2(q)
 print('target dist: ',t.shape)
@@ -343,10 +345,17 @@ def training(max_it, it_offset):
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
-        # if it % (batch_epoch) == 0:
-        #     predict_y = sess.run(predicts, feed_dict={real: X})
-        #     acc = cluster_acc(predict_y, Y)
-        #     print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+        if it % (batch_epoch) == 0:
+            predict_y = sess.run(predicts2, feed_dict={real2: X})
+            acc = cluster_acc(predict_y, Y)
+            print('full-acc-EPOCH-%d'%(it//(batch_epoch)),acc[0])
+            dist = [0] * 10
+            t_dist = [0] * 10
+            for py, y_ in zip(predict_y, Y):
+                dist[py] += 1
+                t_dist[y_] += 1
+            print('true dist: ', np.array(t_dist) / float(len(predict_y)))
+            print('pred dist: ', np.array(dist) / float(len(predict_y)))
         #     plt.clf()
         #     sample = sess.run(z_mean, feed_dict={real: test_data_list})
         #     X_embedded = tsne.fit_transform(sample)
@@ -394,7 +403,7 @@ def recon_training(max_it, it_offset):
             summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         if it % (batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X})
+            predict_y = sess.run(predicts, feed_dict={real2: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
             plt.clf()
