@@ -300,6 +300,20 @@ def cat_generator(z,reuse=True, name = "generator", training = True):
             # out_put_sets.append(y_1)
         return y
 
+def cat_generator2(z,reuse=True, name = "generator", training = True):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu_2, biases_initializer=None)
+    # fc_bn_lrelu_2 = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_lrelu(z, 500)
+        y = fc_bn_lrelu(y, 500)
+        y = fc_bn_lrelu(y, 1000)
+
+        y = tf.sigmoid(fc(y, 960))
+        # y = tf.reshape(y, [-1, 28, 28, 1])
+            # out_put_sets.append(y_1)
+        return y
+
 def cat_discriminator(z, out_dim=10, reuse=True, name = "discriminator", training = True, stddev=0.3):
     bn = partial(batch_norm, is_training=training)
     fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu_2, biases_initializer=None)
@@ -403,9 +417,9 @@ def cnn_discriminator_cifar(z, out_dim=10, reuse=True, name = "discriminator" , 
         y = tf.layers.max_pooling2d(inputs=y, pool_size=[3, 3], strides=2)
         y = conv_lrelu(y, 192, 3, 1)
         y = conv_lrelu(y, 192, 1, 1)
-        y = conv_lrelu(y, 10, 1, 1)
+        y = conv_lrelu(y, out_dim, 1, 1)
         y = tf.reduce_mean(y, [1, 2])
-        y = fc(y,out_dim)
+        # y = fc(y,out_dim)
         return y
 
 def cnn_generator(z, reuse = True, name = "generator", training=True):
@@ -424,3 +438,15 @@ def cnn_generator(z, reuse = True, name = "generator", training=True):
 
         # out_put_sets.append(y_1)
         return y
+
+def catdiscriminator(img, dim=64, reuse=True, training=True, name= 'discriminator', out_dim=10):
+    bn = partial(batch_norm, is_training=training)
+    conv_bn_lrelu = partial(conv, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+    fc_bn_lrelu = partial(fc, normalizer_fn=bn, activation_fn=lrelu, biases_initializer=None)
+
+    with tf.variable_scope(name, reuse=reuse):
+        y = lrelu(conv(img, 1, 5, 2))
+        y = conv_bn_lrelu(y, dim, 5, 2)
+        y = fc_bn_lrelu(y, 1024)
+        logit = fc(y, out_dim)
+        return logit

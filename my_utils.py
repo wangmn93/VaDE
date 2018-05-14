@@ -2,7 +2,7 @@ import data_mnist as data
 import utils
 import tensorflow as tf
 import numpy as np
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 import scipy.io as scio
 import sys
 import gzip
@@ -75,6 +75,16 @@ def unpickle(file):
     with open(file, 'rb') as fo:
         dict = cPickle.load(fo)
     return dict
+
+def get_svhn(shift=False):
+    import scipy.io as sio
+    train_data = sio.loadmat('../train_32x32.mat')
+    if shift:
+        X = train_data['X']/127.5 -1
+    else:
+        X = train_data['X']/255.
+    X.transpose([3, 0, 1, 2])
+    return X, train_data['y']
 
 def load_full_cifar_10(shift):
     img = None

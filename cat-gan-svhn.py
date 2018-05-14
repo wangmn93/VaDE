@@ -31,58 +31,52 @@ def Encoder(x, reuse=True, training=True, name="encoder", out_dim=10):
         logits = fc(y,out_dim, scope='layer3')
         return logits
 
-# def Generator(z, reuse=False, training=True, name="generator", out_dim=960):
-#     bn = partial(batch_norm, is_training=training)
-#     fc_bn_relu = partial(fc, activation_fn=relu, normalizer_fn=bn)
-#     with tf.variable_scope(name, reuse=reuse):
-#         y = fc_bn_relu(z, 500, scope='layer1')
-#         y = fc_bn_relu(y, 1000, scope="layer2")
-#         y = fc(y, out_dim, scope='layer3')
-#         return y
+def Generator(z, reuse=False, training=True, name="generator", out_dim=960):
+    bn = partial(batch_norm, is_training=training)
+    fc_bn_relu = partial(fc, activation_fn=relu, normalizer_fn=bn)
+    with tf.variable_scope(name, reuse=reuse):
+        y = fc_bn_relu(z, 500, scope='layer1')
+        y = fc_bn_relu(y, 1000, scope="layer2")
+        y = tf.nn.sigmoid(fc(y, out_dim, scope='layer3'))
+        return y
 
 """ param """
 epoch = 50
-batch_size = 250
-lr = 2e-3
-beta1 = 0.9
-gan_type="rim"
+batch_size = 100
+lr = 2e-4
+beta1 = 0.5
+gan_type="catgan-svhn"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
 
 
 ''' data '''
 import utils
-#svhn-gist
+#svhn
 import scipy.io as sio
-from sklearn import preprocessing
 train_data = sio.loadmat('../train_32x32.mat')
 X = np.load('svhn-gist.npy')
-X = preprocessing.scale(X)
-# X = np.load('svhn-gist-2.npy')
-# X = np.load('svhn-imagenet.npy')
-# X = np.reshape(X,(30000,9216))
-# X = np.load('svhn-gist-apx.npy')
 Y = train_data['y']
 data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
+
 # inputs
 real = tf.placeholder(tf.float32, shape=[None, 960])
-
-#mnist
+random_z = tf.random_normal(shape=(batch_size, 128),
+                       mean=0, stddev=1, dtype=tf.float32)
+##mnist
 # X, Y = my_utils.load_data('mnist')
-# import data_mnist as data
-# X, Y, _ = data.mnist_load('Fashion_MNIST',shift=False)
-# X = np.reshape(X, [60000,28,28,1])
-# # # num_data = 70000
 # data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
-# # # inputs
-# # real = tf.placeholder(tf.float32, shape=[None, 784])
-# real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
+## X = np.reshape(X, [70000,28,28,1])
+# num_data = 70000
+#
+# # inputs
+# real = tf.placeholder(tf.float32, shape=[None, 784])
 
 """ graphs """
-encoder = Encoder
 # import models_mnist as models
-# encoder = partial(models.catdiscriminator, name='encoder', out_dim = 10)
-# generator = Generator
+encoder = Encoder
+# encoder = partial(models.cat_discriminator, name='encoder')
+generator = Generator
+# generator = models.cat_generator2
 optimizer = tf.train.AdamOptimizer
 
 #marginal entropy
@@ -98,8 +92,12 @@ def cond_entropy(y):
     return y2
 
 #encoder
-logits = encoder(real, reuse=False)
-p = tf.nn.softmax(logits)
+real_logits = encoder(real, reuse=False)
+p = tf.nn.softmax(real_logits)
+
+fake = generator(random_z,reuse=False)
+fake_logits = encoder(fake)
+fake_p = tf.nn.softmax(fake_logits)
 
 #predict
 logits_ = encoder(real, training=False)
@@ -109,27 +107,32 @@ predicts = tf.argmax(p_,axis=1)
 #variables
 T_vars = tf.trainable_variables()
 en_var = [var for var in T_vars if var.name.startswith('encoder')]
-
+g_var = [var for var in T_vars if var.name.startswith('generator')]
 #loss
-weight = tf.placeholder(tf.float32, shape=[])
-init_weight = 0.05
-loss = -1 * (mar_entropy(p) - cond_entropy(p)) + weight * tf.add_n([ tf.nn.l2_loss(v) for v in en_var])
+# loss = -1 * (mar_entropy(p) - cond_entropy(p)) + 0.1 * tf.add_n([ tf.nn.l2_loss(v) for v in en_var])
+loss = -1 * (mar_entropy(p) - cond_entropy(p) + cond_entropy(fake_p))# + 0.01 * tf.add_n([ tf.nn.l2_loss(v) for v in en_var])
+loss2 = -1 * (mar_entropy(p) - cond_entropy(p) + cond_entropy(fake_p)) + 0.01 * tf.add_n([ tf.nn.l2_loss(v) for v in en_var])
+g_loss = -mar_entropy(fake_p) + cond_entropy(fake_p)
 
 # optimize
 global_step = tf.Variable(0, name='global_step',trainable=False)
 en_step = optimizer(learning_rate=lr, beta1=beta1).minimize(loss, var_list=en_var, global_step=global_step)
+en_step2 = optimizer(learning_rate=lr, beta1=beta1).minimize(loss2, var_list=en_var, global_step=global_step)
+g_step = optimizer(learning_rate=lr, beta1=beta1).minimize(g_loss, var_list=g_var)
 
 """ train """
 ''' init '''
 # session
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1)
 sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
+
 # saver
 saver = tf.train.Saver(max_to_keep=5)
 # d_saver = tf.train.Saver(var_list=d_var_for_save)
 # summary writer
 # Send summary statistics to TensorBoard
 tf.summary.scalar('loss', loss)
+tf.summary.scalar('G loss', g_loss)
 merged = tf.summary.merge_all()
 logdir = dir+"/tensorboard"
 writer = tf.summary.FileWriter(logdir, sess.graph)
@@ -147,42 +150,31 @@ def training(max_it, it_offset):
 
     for it in range(it_offset, it_offset + max_it):
         real_ipt, y = data_pool.batch(['img', 'label'])
-        # if it%700 ==0 and it>0:
-        #     global init_weight
-        #     init_weight = max(init_weight*0.5, 0.01)
-        #     print(init_weight)
-        _ = sess.run([en_step], feed_dict={real: real_ipt,weight:init_weight})
+        # if it//(batch_epoch) > 5:
+        #     _ = sess.run(en_step2, feed_dict={real: real_ipt})
+        # else:
+        _, _ = sess.run([en_step, g_step], feed_dict={real: real_ipt})
 
         if it%10 == 0 :
-            summary = sess.run(merged, feed_dict={real: real_ipt,weight:init_weight})
+            summary = sess.run(merged, feed_dict={real: real_ipt})
             writer.add_summary(summary, it)
         #
         if it%(batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[:10000]})
-            acc = my_utils.cluster_acc(predict_y, Y[:10000])
+            predict_y = sess.run(predicts, feed_dict={real: X[:5000]})
+            acc = my_utils.cluster_acc(predict_y, Y[:5000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
 
 
 total_it = 0
 try:
     training(max_it,0)
-    # total_it = sess.run(global_step)
-    # print("Total iterations: "+str(total_it))
-
-    #eva
-    # saver.restore(sess,'results/rim-20180513-203841/checkpoint/model.ckpt')
-    # predict_y = sess.run(predicts, feed_dict={real: X[:35000]})
-    # predict_y_ = sess.run(predicts, feed_dict={real: X[35000:]})
-    # all_y = np.concatenate((predict_y,predict_y_))
-    # acc = my_utils.cluster_acc(all_y, Y)
-    # np.save('gist-0.364',all_y)
-    # print('full-acc', acc[0])
-
+    total_it = sess.run(global_step)
+    print("Total iterations: "+str(total_it))
 except Exception, e:
     traceback.print_exc()
 finally:
 
-    # save_path = saver.save(sess, dir+"/checkpoint/model.ckpt")
-    # print("Model saved in path: %s" % save_path)
-    # print(" [*] Close main session!")
+    save_path = saver.save(sess, dir+"/checkpoint/model.ckpt")
+    print("Model saved in path: %s" % save_path)
+    print(" [*] Close main session!")
     sess.close()

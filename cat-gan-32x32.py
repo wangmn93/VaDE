@@ -26,17 +26,34 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
-# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
-data_pool = my_utils.getFashion_MNISTDatapool(batch_size, shift=False)
-X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
-X = np.reshape(X, [70000,28,28,1])
-num_data = 70000
+# import numpy as np
+import scipy.io as sio
+import matplotlib.pyplot as plt
 
-from sklearn.neighbors import KernelDensity
-kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(np.reshape(X[:10000],[10000,784]))
-# print kde.score(x_2)/len(x_2)
+
+# image_ind = 10
+train_data = sio.loadmat('../train_32x32.mat')
+
+# access to the dict
+x_train = train_data['X']
+y_train = train_data['y']
+x_train = x_train / 255.
+x_train = x_train.transpose([3, 0, 1, 2])
+# show sample
+# print len(y_train)
+# for i in range(10):
+# 	plt.imshow(x_train[i])
+# 	plt.show()
+# 	print y_train[i]
+# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
+import utils
+data_pool = utils.MemoryData({'img': x_train, 'label':y_train}, batch_size)
+# data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
+# X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
+# X, Y = my_utils.load_data('mnist')
+# X = np.reshape(X, [70000,28,28,1])
+# num_data = 70000
+
 # test_data = [[], [], [], [], [], [], [], [], [], []]
 # colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
 # plt.ion() # enables interactive mode
@@ -50,15 +67,14 @@ kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(np.reshape(X[:10000],[
 """ graphs """
 
 generator = models.generator
-encoder = partial(models.cnn_discriminator, name='encoder', out_dim = 10)
+encoder = partial(models.cnn_discriminator_cifar, name='encoder', out_dim = 10)
 optimizer = tf.train.AdamOptimizer
 
 # inputs
-real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
+real = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 random_z = tf.random_normal(shape=(batch_size, z_dim),
                        mean=0, stddev=1, dtype=tf.float32)
-random_z2 = tf.random_normal(shape=(10000, z_dim),
-                       mean=0, stddev=1, dtype=tf.float32)
+
 #marginal entropy
 def mar_entropy(y):
     y1 = tf.reduce_mean(y,axis=0)
@@ -118,7 +134,6 @@ saver = tf.train.Saver(max_to_keep=5)
 tf.summary.scalar('d_loss', d_loss)
 tf.summary.scalar('g_loss', g_loss)
 images_from_g = generator(random_z, training=False)
-images_from_g2 = generator(random_z2, training=False)
 tf.summary.image('Generator_image', images_from_g, 12)
 
 #predict
@@ -186,17 +201,14 @@ def training(max_it, it_offset):
             writer.add_summary(summary, it)
         #
         if it%(batch_epoch) == 0:
-            predict_y = sess.run(predicts, feed_dict={real: X[60000:62000]})
+            predict_y = sess.run(predicts, feed_dict={real: X[:2000]})
             # predict_y_2 = sess.run(predicts, feed_dict={real: X[35000:]})
-            acc = cluster_acc(predict_y, Y[60000:62000])
-            for_eva = sess.run(images_from_g2, feed_dict={})
-            for_eva = np.reshape(for_eva, [10000, 784])
-            print('avg ll ',kde.score(for_eva) / len(for_eva))
+            acc = cluster_acc(predict_y, Y[:2000])
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
             dist = [0] * 10
 
             t_dist = [0] * 10
-            for py, y_ in zip(predict_y, Y[60000:62000]):
+            for py, y_ in zip(predict_y, Y[:2000]):
                dist[py] += 1
                t_dist[y_] += 1
             print('true dist: ', np.array(t_dist) / float(len(predict_y)))
