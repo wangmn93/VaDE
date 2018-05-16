@@ -31,7 +31,7 @@ dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 #===========svhn=================
 import scipy.io as sio
 train_data = sio.loadmat('../train_32x32.mat')
-X = train_data['X']/127.5 - 1
+X = train_data['X']/255.
 Y = train_data['y']
 X = X.transpose([3, 0, 1, 2])
 # data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
@@ -53,8 +53,8 @@ heads =1
 # generator = partial(models.generator_m2_32X32, heads=1)
 # discriminator = partial(models.discriminator2, name='d_2')
 
-generator = partial(models.generator_m2_32X32_dc, heads=1)
-discriminator = partial(models.discriminator2_32X32_dc, name='d_2')
+generator = partial(models.generator_m2_32X32, heads=2)
+discriminator = partial(models.discriminator2, name='d_2')
 # encoder = partial(models.cnn_discriminator, out_dim = 10)
 # from cnn_classifier import cnn_classifier
 encoder = partial(models.cnn_classifier2, keep_prob = 1.)
@@ -80,12 +80,12 @@ f_logit = discriminator(fake)
 
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
-d_loss = d_loss_real + 1.*d_loss_fake
+d_loss = d_loss_real + .5*d_loss_fake
 
 g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
 
 
-g_loss = .2*g_loss #weight down real loss
+g_loss = .5*g_loss #weight down real loss
 
 for i in range(len(fake_set)):
     onehot_labels = tf.one_hot(indices=tf.cast(tf.scalar_mul(i, tf.ones(batch_size)), tf.int32), depth=n_centroid)
@@ -171,8 +171,8 @@ def gan_train(max_it, it_offset):
 total_it = 0
 try:
     ae_saver = tf.train.Saver(var_list=en_var)
-    ae_saver.restore(sess, 'results/cnn-classifier-model.ckpt')  # 0.49
-
+    # ae_saver.restore(sess, 'results/cnn-classifier-model.ckpt')  # 0.49
+    ae_saver.restore(sess, 'results/cnn-classifier-noshift-model.ckpt')
     dist = [0]*10
     predict_y = sess.run(predicts, feed_dict={real2: X[:2000]})
     acc = cluster_acc(predict_y, Y[:2000])
@@ -185,18 +185,18 @@ try:
 except Exception, e:
     traceback.print_exc()
 finally:
-    # import utils
-    # i = 0
-    # for f in fake_set:
-    #     sample_imgs = sess.run(f)
-    #     # if normalize:
-    #     #     for i in range(len(sample_imgs)):
-    #     sample_imgs = sample_imgs * 2. - 1.
-    #     save_dir = dir + "/sample_imgs"
-    #     utils.mkdir(save_dir + '/')
-    #     # for imgs, name in zip(sample_imgs, list_of_names):
-    #     my_utils.saveSampleImgs(imgs=sample_imgs, full_path=save_dir + "/" + 'sample-%d.jpg' % i, row=8, column=8)
-    #     i += 1
+    import utils
+    i = 0
+    for f in fake_set:
+        sample_imgs = sess.run(f)
+        # if normalize:
+        #     for i in range(len(sample_imgs)):
+        sample_imgs = sample_imgs * 2. - 1.
+        save_dir = dir + "/sample_imgs"
+        utils.mkdir(save_dir + '/')
+        # for imgs, name in zip(sample_imgs, list_of_names):
+        my_utils.saveSampleImgs(imgs=sample_imgs, full_path=save_dir + "/" + 'sample-%d.jpg' % i, row=8, column=8)
+        i += 1
 
     # save checkpoint
     save_path = saver.save(sess, dir+"/checkpoint/model.ckpt")

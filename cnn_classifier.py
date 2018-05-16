@@ -79,7 +79,7 @@ if __name__ == '__main__':
     import scipy.io as sio
     import numpy as np
     train_data = sio.loadmat('../train_32x32.mat')
-    X = train_data['X'] / 127.5 - 1
+    X = train_data['X'] / 255.
     y = train_data['y'] - 1
 
     # Y = train_data['y']
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     acc = my_utils.cluster_acc(predicts, y[:5000])
     # np.save('gist-0.364', all_y)
     print('full-acc', acc[0])
-    save_path = saver.save(sess, "results/cnn-classifier-model.ckpt")
+    save_path = saver.save(sess, "results/cnn-classifier-noshift-model.ckpt")
     print("Model saved in path: %s" % save_path)
     print(" [*] Close main session!")
     sess.close()
