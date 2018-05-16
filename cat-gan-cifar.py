@@ -10,7 +10,7 @@ import models_mnist as models
 import datetime
 import my_utils
 from functools import partial
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
 # tsne = TSNE(n_components=2)
 """ param """
@@ -34,7 +34,7 @@ X, Y = my_utils.load_full_cifar_10(shift=False)
 # X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [len(X), 3, 32, 32])
 X = X.transpose([0, 2, 3, 1])
-num_data = 70000
+num_data = 50000
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
 

@@ -42,9 +42,9 @@ def Encoder(x, reuse=True, training=True, name="encoder", out_dim=10):
 
 """ param """
 epoch = 50
-batch_size = 250
-lr = 2e-3
-beta1 = 0.9
+batch_size = 100
+lr = 2e-4
+beta1 = 0.5
 gan_type="rim"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -55,17 +55,17 @@ import utils
 #svhn-gist
 import scipy.io as sio
 from sklearn import preprocessing
-train_data = sio.loadmat('../train_32x32.mat')
-X = np.load('svhn-gist.npy')
-X = preprocessing.scale(X)
-# X = np.load('svhn-gist-2.npy')
-# X = np.load('svhn-imagenet.npy')
-# X = np.reshape(X,(30000,9216))
-# X = np.load('svhn-gist-apx.npy')
-Y = train_data['y']
-data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
-# inputs
-real = tf.placeholder(tf.float32, shape=[None, 960])
+# train_data = sio.loadmat('../train_32x32.mat')
+# X = np.load('svhn-gist.npy')
+# # X = preprocessing.scale(X)
+# # X = np.load('svhn-gist-2.npy')
+# # X = np.load('svhn-imagenet.npy')
+# # X = np.reshape(X,(30000,9216))
+# # X = np.load('svhn-gist-apx.npy')
+# Y = train_data['y']
+# data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
+# # inputs
+# real = tf.placeholder(tf.float32, shape=[None, 960])
 
 #mnist
 # X, Y = my_utils.load_data('mnist')
@@ -78,6 +78,29 @@ real = tf.placeholder(tf.float32, shape=[None, 960])
 # # real = tf.placeholder(tf.float32, shape=[None, 784])
 # real = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 
+
+#cifar 10
+from sklearn import preprocessing
+_, Y = my_utils.load_full_cifar_10(shift=False)
+# # X = np.reshape(X, [len(X), 3, 32, 32])
+# # X = X.transpose([0, 2, 3, 1])
+# Y = Y[35000:]
+# # X = X[35000:]
+#
+f1 = np.reshape(np.load('cifar10-imagenet-vgg19-1.npy'),[35000,4608])
+f2 = np.reshape(np.load('cifar10-imagenet-vgg19-2.npy'),[15000,4608])
+X = np.concatenate((f1,f2))
+# min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0,1))
+# X = min_max_scaler.fit_transform(X)
+X = preprocessing.scale(X)
+# X = np.load('cifar10-imagenet-resnet-2.npy')
+# X  = np.reshape(X , [15000, 2048])
+#
+# # features = np.concatenate((f1,f2))
+#
+# num_data = 15000
+data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
+real = tf.placeholder(tf.float32, shape=[None,  4608])
 """ graphs """
 encoder = Encoder
 # import models_mnist as models
@@ -149,7 +172,7 @@ def training(max_it, it_offset):
         real_ipt, y = data_pool.batch(['img', 'label'])
         # if it%700 ==0 and it>0:
         #     global init_weight
-        #     init_weight = max(init_weight*0.5, 0.01)
+        #     init_weight = max(init_weight*0.8, 0.01)
         #     print(init_weight)
         _ = sess.run([en_step], feed_dict={real: real_ipt,weight:init_weight})
 

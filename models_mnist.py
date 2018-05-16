@@ -197,6 +197,7 @@ def generator2(z, training=True, reuse=True, name = "generator"):
 
         return out
 
+
 def generator2_mimic(z, training=True, reuse=True, name="generator"):
     bn = partial(batch_norm, is_training=training)
     dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
@@ -237,8 +238,69 @@ def generator_m2(z,heads=10, training=True, reuse=True, name="generator"):
 
         return img_sets
 
+def generator_m2_32X32(z, heads=10, training=True, reuse=True, name="generator"):
 
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = tf.nn.relu(bn(linear(z, 1024, scope='g_fc1'), is_training=training, scope='g_bn1'))
+        net = tf.nn.relu(bn(linear(net, 128 * 8 * 8, scope='g_fc2'), is_training=training, scope='g_bn2'))
+        net = tf.reshape(net, [64, 8, 8, 128])
+        net = tf.nn.relu(
+                bn(deconv2d(net, [64, 16, 16, 64], 4, 4, 2, 2, name='g_dc3'), is_training=training,
+                   scope='g_bn3'))
 
+        img_sets = []
+        for i in range(heads):
+            out = tf.nn.sigmoid(deconv2d(net, [64, 32, 32, 3], 4, 4, 2, 2, name='g_dc4_h' + str(i)))
+            img_sets.append(out)
+
+        return img_sets
+
+def generator_m2_32X32_dc(z, heads=10, training=True, reuse=True, name="generator"):
+
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = tf.nn.relu(bn(linear(z, 2048, scope='g_fc1'), is_training=training, scope='g_bn1'))
+        net = tf.reshape(net, [64, 2, 2, 512])
+        net = tf.nn.relu(
+                bn(deconv2d(net, [64, 4, 4, 4*64], 4, 4, 2, 2, name='g_dc2'), is_training=training,
+                   scope='g_bn2'))
+        net = tf.nn.relu(
+            bn(deconv2d(net, [64, 8, 8, 2 * 64], 4, 4, 2, 2, name='g_dc3'), is_training=training,
+               scope='g_bn3'))
+        net = tf.nn.relu(
+            bn(deconv2d(net, [64, 16, 16, 2 * 64], 4, 4, 2, 2, name='g_dc4'), is_training=training,
+               scope='g_bn4'))
+        img_sets = []
+        for i in range(heads):
+            out = tf.nn.tanh(deconv2d(net, [64, 32, 32, 3], 4, 4, 2, 2, name='g_dc5_h' + str(i)))
+            img_sets.append(out)
+
+        return img_sets
+
+def discriminator2_32X32_dc(x, training=True, reuse=True, name="discriminator"):
+
+        # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
+        # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
+    with tf.variable_scope(name, reuse=reuse):
+        net = lrelu(conv2d(x, 64, 4, 4, 2, 2, name='d_conv1'))
+        net = lrelu(bn(conv2d(net, 64*2, 4, 4, 2, 2, name='d_conv2'), is_training=training, scope='d_bn2'))
+        net = lrelu(bn(conv2d(net, 64 * 4, 4, 4, 2, 2, name='d_conv3'), is_training=training, scope='d_bn3'))
+        net = lrelu(bn(conv2d(net, 64 * 8, 4, 4, 2, 2, name='d_conv4'), is_training=training, scope='d_bn4'))
+            # net = tf.reshape(net, [batch_size, -1])
+            # net = lrelu(bn(linear(net, 1024, scope='d_fc3'), is_training=training, scope='d_bn3'))
+        # net = fc(net, 1024)
+        # net = lrelu(bn(net, is_training=training, scope='d_bn5'))
+        # net = fc(net, 1024)
+        # net = lrelu(bn(net, is_training=training, scope='d_bn3'))
+        # out_logit = linear(net, 1, scope='d_fc4')
+        # out_logit = linear(tf.reshape(net, [64, -1]), 1, 'd_h4_lin')
+        # out_logit = linear(net, 1, scope='d_fc4')
+            # out = tf.nn.sigmoid(out_logit)
+        out_logit = fc(net, 1)
+        return out_logit
 
 def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
     with tf.variable_scope(name, reuse=reuse):
@@ -273,18 +335,79 @@ def cnn_classifier(x,keep_prob, out_dim=10,name="classifier", reuse=True):
         # y = tf.nn.softmax(logits)
         return logits
 
-def generator(z, dim=64, reuse=True, training=True, name="generator"):
-    bn = partial(batch_norm, is_training=training)
-    dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
-    fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
 
+
+
+# x_image = tf.reshape(x, [-1, 32, 32, 3])
+def cnn_classifier2(x, keep_prob,reuse=True, name='classifier'):
+    # def weight_variable(shape):
+    #     initial = tf.truncated_normal(shape, stddev=0.1)
+    #     return tf.Variable(initial)
+    #
+    # def bias_variable(shape):
+    #     initial = tf.constant(0.1, shape=shape)
+    #     return tf.Variable(initial)
+
+    # def conv2d(x, W):
+    #     return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+    def max_pool_2x2(x):
+        return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
+                              strides=[1, 2, 2, 1], padding='SAME')
     with tf.variable_scope(name, reuse=reuse):
-        y = fc_bn_relu(z, 1024)
-        y = fc_bn_relu(y, 7 * 7 * dim * 2)
-        y = tf.reshape(y, [-1, 7, 7, dim * 2])
-        y = dconv_bn_relu(y, dim * 2, 5, 2)
-        img = tf.sigmoid(dconv(y, 1, 5, 2))
-        return img
+    # Convolutional layer 1
+
+        h_conv1 = tf.layers.conv2d(
+        inputs=x,
+        filters=32,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu)
+
+        h_pool1 = max_pool_2x2(h_conv1)
+
+    # Convolutional layer 2
+
+
+        h_conv2 = tf.layers.conv2d(
+        inputs=h_pool1,
+        filters=64,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu)
+        h_pool2 = max_pool_2x2(h_conv2)
+        # print(h_pool2.shape)
+    # Fully connected layer 1
+        h_pool2_flat = tf.reshape(h_pool2, [-1, 8*8*64])
+
+        # W_fc1 = weight_variable([8 * 8 * 64, 1024])
+        # b_fc1 = bias_variable([1024])
+
+        h_fc1 = tf.nn.relu(fc(h_pool2_flat,1024))
+
+    # Dropout
+    # keep_prob  = tf.placeholder(tf.float32)
+        h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+    # Fully connected layer 2 (Output layer)
+    #     W_fc2 = weight_variable([1024, 10])
+    #     b_fc2 = bias_variable([10])
+
+        logits = fc(h_fc1_drop, 10)
+        return logits
+
+# def generator(z, dim=64, reuse=True, training=True, name="generator"):
+#     bn = partial(batch_norm, is_training=training)
+#     dconv_bn_relu = partial(dconv, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+#     fc_bn_relu = partial(fc, normalizer_fn=bn, activation_fn=relu, biases_initializer=None)
+#
+#     with tf.variable_scope(name, reuse=reuse):
+#         y = fc_bn_relu(z, 1024)
+#         y = fc_bn_relu(y, 7 * 7 * dim * 2)
+#         y = tf.reshape(y, [-1, 7, 7, dim * 2])
+#         y = dconv_bn_relu(y, dim * 2, 5, 2)
+#         img = tf.sigmoid(dconv(y, 1, 5, 2))
+#         return img
 
 def cat_generator(z,reuse=True, name = "generator", training = True):
     bn = partial(batch_norm, is_training=training)

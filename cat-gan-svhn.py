@@ -55,6 +55,9 @@ import utils
 import scipy.io as sio
 train_data = sio.loadmat('../train_32x32.mat')
 X = np.load('svhn-gist.npy')
+from sklearn import preprocessing
+min_max_scaler = preprocessing.MinMaxScaler(feature_range=(0,1))
+X = min_max_scaler.fit_transform(X)
 Y = train_data['y']
 data_pool = utils.MemoryData({'img': X, 'label':Y}, batch_size)
 
@@ -150,10 +153,10 @@ def training(max_it, it_offset):
 
     for it in range(it_offset, it_offset + max_it):
         real_ipt, y = data_pool.batch(['img', 'label'])
-        # if it//(batch_epoch) > 5:
-        #     _ = sess.run(en_step2, feed_dict={real: real_ipt})
-        # else:
-        _, _ = sess.run([en_step, g_step], feed_dict={real: real_ipt})
+        if it//(batch_epoch) > 25:
+            _ = sess.run(en_step2, feed_dict={real: real_ipt})
+        else:
+            _, _ = sess.run([en_step, g_step], feed_dict={real: real_ipt})
 
         if it%10 == 0 :
             summary = sess.run(merged, feed_dict={real: real_ipt})

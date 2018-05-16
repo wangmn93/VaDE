@@ -40,8 +40,8 @@ y = train_data['y']
 X = X.transpose([3, 0, 1, 2])
 # X = np.reshape(X,(73257,3072))
 # X = np.array(X)/float(255.)
-pseudo_y = np.load('gist-0.364.npy')
-
+# pseudo_y = np.load('gist-0.364.npy')
+pseudo_y = np.load('svhn-peusdo-label-0.47.npy')
 # Y = train_data['y']
 # data_pool = utils.MemoryData({'img': X, 'label':gist_feature}, batch_size)
 
