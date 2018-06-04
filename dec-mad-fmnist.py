@@ -16,7 +16,7 @@ import  theano.tensor as T
 from keras import backend as K
 import math
 from keras import objectives
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 """ param """
@@ -45,9 +45,9 @@ X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
 # X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
-plt.ion() # enables interactive mode
-test_data_list, numPerClass = my_utils.getTest_data(numPerClass=100)
-colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
+# plt.ion() # enables interactive mode
+# test_data_list, numPerClass = my_utils.getTest_data(numPerClass=100)
+# colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
 #             0       1       2       3        4          5        6        7         8       9
 # from tensorflow.examples.tutorials.mnist import input_data
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
@@ -406,23 +406,23 @@ def recon_training(max_it, it_offset):
             predict_y = sess.run(predicts, feed_dict={real2: X})
             acc = cluster_acc(predict_y, Y)
             print('full-acc-EPOCH-%d' % (it // (batch_epoch)), acc[0])
-            plt.clf()
-            sample = sess.run(z_mean, feed_dict={real: test_data_list})
-            X_embedded = TSNE(n_components=2).fit_transform(sample)
-            for i in range(10):
-                plt.scatter(X_embedded[i * numPerClass:(i + 1) * numPerClass, 0],
-                            X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
-                            color=colors[i],
-                            label=str(i), s=2)
-                # for test_d in test_data:
-                #     sample = sess.run(z_mean, feed_dict={real: test_d})
-                #     # X_embedded = sample
-                #     X_embedded = TSNE(n_components=2).fit_transform(sample)
-                #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
-                #     i += 1
-                plt.draw()
-            # plt.legend(loc='best')
-            plt.show()
+            # plt.clf()
+            # sample = sess.run(z_mean, feed_dict={real: test_data_list})
+            # X_embedded = TSNE(n_components=2).fit_transform(sample)
+            # for i in range(10):
+            #     plt.scatter(X_embedded[i * numPerClass:(i + 1) * numPerClass, 0],
+            #                 X_embedded[i * numPerClass:(i + 1) * numPerClass, 1],
+            #                 color=colors[i],
+            #                 label=str(i), s=2)
+            #     # for test_d in test_data:
+            #     #     sample = sess.run(z_mean, feed_dict={real: test_d})
+            #     #     # X_embedded = sample
+            #     #     X_embedded = TSNE(n_components=2).fit_transform(sample)
+            #     #     plt.scatter(X_embedded[:,0],X_embedded[:,1],color=colors[i],label=str(i), s=2)
+            #     #     i += 1
+            #     plt.draw()
+            # # plt.legend(loc='best')
+            # plt.show()
 
 def gan_train(max_it, it_offset):
     print("gan iteration: " + str(max_it))

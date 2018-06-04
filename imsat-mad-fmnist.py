@@ -24,36 +24,35 @@ epoch = 40
 batch_size = 64
 n_centroid = 10
 
-gan_type="catgan-mad"
+gan_type="imsat-mad"
 dir="results/"+gan_type+"-"+datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 ''' data '''
-# data_pool = my_utils.getFullMNISTDatapool(batch_size, shift=False) #range 0 ~ 1
 data_pool = my_utils.getFullFashion_MNISTDatapool(batch_size, shift=False)
 X,Y = my_utils.loadFullFashion_MNSIT(shift=False)
-# X, Y = my_utils.load_data('mnist')
 X = np.reshape(X, [70000,28,28,1])
 num_data = 70000
-# plt.ion() # enables interactive mode
-# test_data_list, numPerClass = my_utils.getTest_data(numPerClass=100)
-# colors =  ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown']
-# #             0       1       2       3        4          5        6        7         8       9
-
 
 """ graphs """
 
 generator = partial(models.generator_m2, heads=10)
 discriminator = partial(models.discriminator2, name='d_2')
-encoder = partial(models.cnn_discriminator, out_dim = 10)
+encoder = partial(models.imsatEncoder, name='encoder', training=False, update_batch_stats=False)
 optimizer = tf.train.AdamOptimizer
 
 # inputs
 real = tf.placeholder(tf.float32, shape=[batch_size, 28, 28, 1])
 real2 = tf.placeholder(tf.float32, shape=[None, 28, 28, 1])
 
-r_mean = encoder(real2, reuse=False)
-r_p = tf.nn.softmax(r_mean)
-predicts = tf.argmax(r_p, axis=1)
+
+# r_mean = encoder(real2, reuse=False)
+# r_p = tf.nn.softmax(r_mean)
+# predicts = tf.argmax(r_p, axis=1)
+
+# import models_mnist as models
+logits_ = encoder(real2,reuse=False)
+p_ = tf.nn.softmax(logits_)
+predicts = tf.argmax(p_,axis=1)
 
 #=====================
 z = tf.random_normal(shape=(batch_size, 62),
@@ -66,7 +65,7 @@ f_logit = discriminator(fake)
 
 d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=r_logit, labels=tf.ones_like(r_logit)))
 d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.zeros_like(f_logit)))
-d_loss = d_loss_real + 0.1*d_loss_fake
+d_loss = d_loss_real + .1*d_loss_fake
 
 g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=f_logit, labels=tf.ones_like(f_logit)))
 
@@ -81,9 +80,10 @@ for i in range(len(fake_set)):
     # g_loss += cat_weight*tf.reduce_mean(tf.losses.softmax_cross_entropy(logits=f_l, onehot_labels=onehot_labels))
 
 # trainable variables for each network
+G_vars = tf.global_variables()
 T_vars = tf.trainable_variables()
-en_var = [var for var in T_vars if var.name.startswith('discriminator')]
-# en_var = [var for var in T_vars if var.name.startswith('encoder')]
+# en_var = [var for var in T_vars if var.name.startswith('discriminator')]
+en_var = [var for var in G_vars if var.name.startswith('encoder')]
 g_var = [var for var in T_vars if var.name.startswith('generator')]
 dis_var = [var for var in T_vars if var.name.startswith('d_2')]
 
@@ -150,15 +150,17 @@ def gan_train(max_it, it_offset):
 total_it = 0
 try:
     ae_saver = tf.train.Saver(var_list=en_var)
-    ae_saver.restore(sess, 'results/cat-gan-20180427-163030/checkpoint/model.ckpt')  # 0.73
+    ae_saver.restore(sess, 'results/imsat-20180603-100343/checkpoint/model.ckpt')  # 0.71
 
-    dist = [0]*10
-    predict_y = sess.run(predicts, feed_dict={real2: X[:2000]})
-    acc = cluster_acc(predict_y, Y[:2000])
+    # dist = [0]*10
+    # x_, y_ = whole.get_(20000, need_index=False)
+    predict_y = sess.run(predicts, feed_dict={real2: X[:20000]})
+    # predict_y = sess.run(predicts, feed_dict={real2: X[:2000]})
+    acc = cluster_acc(predict_y, Y[:20000])
     print(acc[0])
-    for i in predict_y:
-        dist[i] += 1
-    print(np.array(dist)/float(2000))
+    # for i in predict_y:
+    #     dist[i] += 1
+    # print(np.array(dist)/float(2000))
     gan_train(max_it, 0)
 
 except Exception, e:

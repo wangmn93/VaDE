@@ -119,3 +119,59 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
             return tf.matmul(input_, matrix) + bias, matrix, bias
         else:
             return tf.matmul(input_, matrix) + bias
+
+
+def bn(x, dim, is_training=True, update_batch_stats=True, collections=None, name="bn"):
+    params_shape = (dim,)
+    n = tf.to_float(tf.reduce_prod(tf.shape(x)[:-1]))
+    axis = list(range(int(tf.shape(x).get_shape().as_list()[0]) - 1))
+    mean = tf.reduce_mean(x, axis)
+    var = tf.reduce_mean(tf.pow(x - mean, 2.0), axis)
+    avg_mean = tf.get_variable(
+        name=name + "_mean",
+        shape=params_shape,
+        initializer=tf.constant_initializer(0.0),
+        collections=collections,
+        trainable=False
+    )
+
+    avg_var = tf.get_variable(
+        name=name + "_var",
+        shape=params_shape,
+        initializer=tf.constant_initializer(1.0),
+        collections=collections,
+        trainable=False
+    )
+
+    gamma = tf.get_variable(
+        name=name + "_gamma",
+        shape=params_shape,
+        initializer=tf.constant_initializer(1.0),
+        collections=collections
+    )
+
+    beta = tf.get_variable(
+        name=name + "_beta",
+        shape=params_shape,
+        initializer=tf.constant_initializer(0.0),
+        collections=collections,
+    )
+
+    if is_training:
+        avg_mean_assign_op = tf.no_op()
+        avg_var_assign_op = tf.no_op()
+        if update_batch_stats:
+            avg_mean_assign_op = tf.assign(
+                avg_mean,
+                0.99 * avg_mean + (1 - 0.99) * mean)
+            avg_var_assign_op = tf.assign(
+                avg_var,
+                0.99 * avg_var + (n / (n - 1))
+                * (1 - 0.99) * var)
+
+        with tf.control_dependencies([avg_mean_assign_op, avg_var_assign_op]):
+            z = (x - mean) / tf.sqrt(1e-6 + var)
+    else:
+        z = (x - avg_mean) / tf.sqrt(1e-6 + avg_var)
+
+    return gamma * z + beta

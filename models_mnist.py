@@ -573,3 +573,15 @@ def catdiscriminator(img, dim=64, reuse=True, training=True, name= 'discriminato
         y = fc_bn_lrelu(y, 1024)
         logit = fc(y, out_dim)
         return logit
+
+def imsatEncoder(x, reuse=True, training=True, update_batch_stats=True, name="encoder", out_dim=10):
+    bn2 = partial(ops.bn, is_training=training, update_batch_stats=update_batch_stats)
+    # fc_bn_relu = partial(fc, activation_fn=relu, normalizer_fn=bn2)
+    init1 = tf.variance_scaling_initializer(scale=0.02, mode='fan_in', distribution='normal')
+    init2 = tf.variance_scaling_initializer(scale=2e-8, mode='fan_in', distribution='normal')
+    with tf.variable_scope(name, reuse=reuse):
+
+        y = relu(bn2(fc(x, 1200, weights_initializer=init1),dim=1200, name='bn1'))
+        y = relu(bn2(fc(y, 1200, weights_initializer=init1),dim=1200, name='bn2'))
+        logits = fc(y,out_dim, weights_initializer=init2)
+        return logits
